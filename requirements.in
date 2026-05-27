@@ -1,0 +1,51 @@
+# ── Core ML ──────────────────────────────────────────────────────────────────
+torch
+torchvision
+pytorch-lightning
+timm
+albumentations
+scikit-learn
+optuna
+numpy
+Pillow
+
+# ── Data pipeline ─────────────────────────────────────────────────────────────
+pandas
+pyarrow
+requests
+boto3
+dvc[s3]
+
+# ── Experiment tracking ───────────────────────────────────────────────────────
+mlflow
+codecarbon
+
+# ── Configuration ─────────────────────────────────────────────────────────────
+hydra-core
+omegaconf
+
+# ── Inference API (FastAPI backend) ───────────────────────────────────────────
+fastapi
+uvicorn[standard]
+pydantic
+python-multipart
+sentry-sdk[fastapi]
+
+# ── Review dashboard (Streamlit frontend) ─────────────────────────────────────
+streamlit
+plotly
+sqlalchemy
+psycopg2-binary
+
+# ── XAI ──────────────────────────────────────────────────────────────────────
+grad-cam
+captum
+
+# ── Drift monitoring ──────────────────────────────────────────────────────────
+evidently
+ddtrace
+
+# ── Utilities ─────────────────────────────────────────────────────────────────
+python-dotenv
+matplotlib
+seaborn

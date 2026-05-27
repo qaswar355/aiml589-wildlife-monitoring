@@ -1,0 +1,58 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Environment secrets — never commit
+.env
+
+# DVC — tracked data and models are in DVC, not git
+/data/*
+!/data/.gitkeep
+/models/*
+!/models/.gitkeep
+
+# MLflow local runs (if running tracking server locally)
+mlruns/
+mlartifacts/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Pytest / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Hydra outputs
+outputs/
+multirun/
+
+# codecarbon
+emissions.csv
+
+# Docker
+*.log

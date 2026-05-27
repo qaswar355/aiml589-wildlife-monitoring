@@ -1,0 +1,5 @@
+[core]
+    remote = storage
+['remote "storage"']
+    url = s3://wildlife-pipeline-dvc/dvc
+    endpointurl = https://sfo3.digitaloceanspaces.com
