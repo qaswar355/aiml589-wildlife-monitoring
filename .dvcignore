@@ -1,0 +1,6 @@
+# DVC ignores these paths (like .gitignore but for DVC)
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+mlruns/

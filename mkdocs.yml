@@ -1,0 +1,26 @@
+site_name: Wildlife Monitoring Pipeline
+site_description: AIML 589 Masters Thesis — NZ Camera Trap Classifier
+site_author: Qaswar Almousa
+repo_url: https://github.com/qaswar355/aiml589-wildlife-monitoring
+
+theme:
+  name: material
+  palette:
+    primary: green
+    accent: teal
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - toc.integrate
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+
+nav:
+  - Home: index.md
+  - Architecture: architecture.md
+  - API Reference: api.md

@@ -1,0 +1,35 @@
+name: Drift-Triggered Retraining
+
+on:
+  workflow_dispatch:      # manual trigger for testing
+  repository_dispatch:
+    types: [drift-detected]   # fired by src/monitoring/drift.py when threshold breached
+
+jobs:
+  retrain:
+    runs-on: ubuntu-latest
+    environment: production   # requires-reviewer gate (GitHub Pro environment protection)
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Reproduce DVC pipeline
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.DO_SPACES_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.DO_SPACES_SECRET }}
+        run: dvc repro
+
+      - name: Evaluate and gate-check new model
+        run: python -m src.training.evaluate --gate-check
+        # Gate: recall >= recall_floor in threshold_config.yaml
+        # Fails the workflow if the new model regresses
+
+      # TODO Phase 5: promote to MLflow Model Registry on gate pass

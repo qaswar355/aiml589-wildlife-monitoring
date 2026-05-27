@@ -1,0 +1,12 @@
+# Decision threshold per deployment zone.
+# Set via precision-recall curve analysis in src/training/evaluate.py.
+# Prioritises recall (minimise false negatives = missed invasive mammals).
+# Updated after each retraining cycle.
+thresholds:
+  default: 0.5         # placeholder — set after first training run
+  north_island: 0.5
+  south_island: 0.5
+  fiordland: 0.5       # high-sensitivity zone (critical kiwi habitat)
+
+# Minimum recall floor enforced by the model governance gate
+recall_floor: 0.90

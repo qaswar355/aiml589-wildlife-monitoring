@@ -1,0 +1,24 @@
+# @package _global_
+data:
+  lila_metadata_url: "s3://us-west-2.opendata.source.coop/agentmorris/lila-wildlife/nz-trailcams"
+  manifest_path: "data/manifest.csv"
+  split_ratios: [0.70, 0.15, 0.15]  # train / val / test (site-level)
+  per_species_cap: 8000              # max images per mammal species
+  image_size: 224
+
+  mammals:  # invasive predators → label 1
+    - mouse
+    - possum
+    - rat
+    - stoat
+    - ferret
+    - feral_cat
+    - hedgehog
+    - weasel
+
+  excluded:  # contaminate binary boundary
+    - human
+    - vehicle
+    - deer
+    - cattle
+    - sheep

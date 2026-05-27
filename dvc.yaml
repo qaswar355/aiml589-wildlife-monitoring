@@ -1,0 +1,48 @@
+stages:
+  ingest:
+    cmd: python -m src.data.filter_and_sample
+    deps:
+      - src/data/filter_and_sample.py
+      - configs/data/default.yaml
+    outs:
+      - data/manifest.csv
+
+  preprocess:
+    cmd: python -m src.data.preprocessing
+    deps:
+      - src/data/preprocessing.py
+      - data/manifest.csv
+    outs:
+      - data/processed/
+
+  split:
+    cmd: python -m src.data.splitting
+    deps:
+      - src/data/splitting.py
+      - data/manifest.csv
+    outs:
+      - data/splits/
+
+  train:
+    cmd: python -m src.training.train
+    deps:
+      - src/training/train.py
+      - src/models/efficientnet.py
+      - data/splits/
+      - configs/training/default.yaml
+      - configs/model/efficientnet_b3.yaml
+    outs:
+      - models/checkpoint.pt
+
+  evaluate:
+    cmd: python -m src.training.evaluate
+    deps:
+      - src/training/evaluate.py
+      - models/checkpoint.pt
+      - data/splits/
+    metrics:
+      - metrics/eval.json:
+          cache: false
+    plots:
+      - metrics/roc_curve.csv:
+          cache: false

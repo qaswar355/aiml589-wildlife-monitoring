@@ -1,0 +1,14 @@
+# @package _global_
+training:
+  max_epochs: 30
+  batch_size: 32
+  learning_rate: 1.0e-4
+  weight_decay: 1.0e-2
+  optimizer: adamw
+  scheduler: cosine_annealing
+  early_stopping_patience: 5
+  accelerator: auto       # "gpu" on HPC/Azure, "mps" on Apple Silicon, "cpu" fallback
+
+mlflow:
+  experiment_name: wildlife_classifier
+  tracking_uri: ${oc.env:MLFLOW_TRACKING_URI,http://localhost:5000}
