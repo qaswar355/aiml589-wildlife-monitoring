@@ -56,3 +56,6 @@ emissions.csv
 
 # Docker
 *.log
+
+# Personal project docs — not part of the codebase
+/ProjectDetails/

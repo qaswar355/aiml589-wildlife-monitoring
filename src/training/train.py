@@ -12,5 +12,7 @@ Covers:
 Entry point: `python -m src.training.train --config-name default`
              (Hydra resolves configs/training/default.yaml)
 
-HPC usage: submit via SLURM — see scripts/slurm_train.sh
+HPC usage: ECS GPU servers are shared, cooperative-etiquette machines with
+no job scheduler — run via `tmux`, pinned to a specific GPU, not submitted
+to a queue.
 """
