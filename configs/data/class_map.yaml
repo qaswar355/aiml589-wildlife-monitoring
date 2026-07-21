@@ -1,0 +1,17 @@
+# The active label scheme for the current experiment. Change this file to
+# re-frame the task (e.g. back to predator-vs-native, or a future 4-class
+# scheme) — nothing else needs to change. species_taxonomy.yaml (the
+# biological ground truth) stays fixed; this file just says which taxon is
+# label 1, which is label 0, and which taxa are dropped entirely.
+name: mammal_vs_bird
+positive_class: mammal        # label 1
+negative_class: bird          # label 0
+exclude: [other]              # dropped from training
+
+# Open decision (supervisor): include all mammals, or wild mammals only?
+# If wild_only, livestock/domestic species (wild: false in
+# species_taxonomy.yaml — cow, sheep, horse, dog, chicken) are excluded
+# entirely (not relabelled), regardless of which taxon they belong to, so
+# that neither class is contaminated by incidentally-photographed farm
+# animals.
+mammal_scope: all             # all | wild_only
