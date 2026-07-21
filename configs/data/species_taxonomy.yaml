@@ -1,0 +1,133 @@
+# Reference taxonomic grouping for the 97 species categories present in the
+# LILA "Trail Camera Images of New Zealand Animals" metadata
+# (data/nz_flat.parquet, category column). This is the stable biological
+# ground truth and should not need to change; the *label* used for the
+# current experiment (mammal vs bird, predator vs native, etc.) is defined
+# separately in class_map.yaml and can be swapped freely without touching
+# this file.
+#
+# Do not rename, correct, or re-key any species string here — they must
+# match the raw dataset values exactly, including `grey_faced_petrol`,
+# which is a misspelling of "petrel" in the source metadata.
+#
+# Fields per species:
+#   taxon:  mammal | bird | other   — exhaustive, mutually exclusive
+#   native: true/false/null — indigenous to Aotearoa NZ. Species that
+#     naturally self-colonised NZ (harrier, pukeko, silvereye,
+#     white_faced_heron, spurwing_plover, swallow, swan/black swan) are
+#     counted native, consistent with DOC's treatment of natural
+#     colonisers as distinct from human-introduced species.
+#   wild: true/false/null — false only for domestic/livestock species
+#     that are incidentally photographed rather than part of a
+#     self-sustaining wild population (cow, sheep, horse, dog, chicken).
+#     Feral populations of introduced species (e.g. cat, pig, goat) are
+#     wild=true.
+#
+# The four "other" categories (human, moth, lizard, skink) sit outside the
+# mammal/bird task entirely and are dropped via class_map.yaml's `exclude`
+# list. `moth`, `lizard`, and `skink` are dataset-level groupings that are
+# not resolved to a single species, so native/wild are left null for them
+# rather than guessed; `human` is native: null (not an applicable concept),
+# wild: false.
+#
+# Counts (asserted in src/data/species_map.py, not just trusted here):
+#   mammal: 22   bird: 71   other: 4   total: 97
+
+species:
+  banded_dotterel:            {taxon: bird,   native: true,  wild: true}
+  banded_rail:                {taxon: bird,   native: true,  wild: true}
+  bellbird:                   {taxon: bird,   native: true,  wild: true}
+  black_backed_gull:          {taxon: bird,   native: true,  wild: true}
+  black_billed_gull:          {taxon: bird,   native: true,  wild: true}
+  black_fronted_tern:         {taxon: bird,   native: true,  wild: true}
+  blackbird:                  {taxon: bird,   native: false, wild: true}
+  brown_creeper:               {taxon: bird,   native: true,  wild: true}
+  canada_goose:                {taxon: bird,   native: false, wild: true}
+  cat:                         {taxon: mammal, native: false, wild: true}
+  chaffinch:                   {taxon: bird,   native: false, wild: true}
+  chamois:                     {taxon: mammal, native: false, wild: true}
+  chicken:                     {taxon: bird,   native: false, wild: false}
+  cow:                         {taxon: mammal, native: false, wild: false}
+  crake:                        {taxon: bird,   native: true,  wild: true}
+  deer:                         {taxon: mammal, native: false, wild: true}
+  dog:                          {taxon: mammal, native: false, wild: false}
+  dunnock:                      {taxon: bird,   native: false, wild: true}
+  fantail:                      {taxon: bird,   native: true,  wild: true}
+  fernbird:                     {taxon: bird,   native: true,  wild: true}
+  ferret:                       {taxon: mammal, native: false, wild: true}
+  fiordland_crested_penguin:    {taxon: bird,   native: true,  wild: true}
+  fluttering_shearwater:        {taxon: bird,   native: true,  wild: true}
+  goat:                         {taxon: mammal, native: false, wild: true}
+  goldfinch:                    {taxon: bird,   native: false, wild: true}
+  greenfinch:                   {taxon: bird,   native: false, wild: true}
+  grey_duck:                    {taxon: bird,   native: true,  wild: true}
+  grey_faced_petrol:            {taxon: bird,   native: true,  wild: true}  # sic — dataset misspells "petrel"
+  grey_warbler:                 {taxon: bird,   native: true,  wild: true}
+  hare:                         {taxon: mammal, native: false, wild: true}
+  harrier:                      {taxon: bird,   native: true,  wild: true}
+  hedgehog:                     {taxon: mammal, native: false, wild: true}
+  horse:                        {taxon: mammal, native: false, wild: false}
+  human:                        {taxon: other,  native: null,  wild: false}
+  kaka:                         {taxon: bird,   native: true,  wild: true}
+  kea:                          {taxon: bird,   native: true,  wild: true}
+  kereru:                       {taxon: bird,   native: true,  wild: true}
+  kingfisher:                   {taxon: bird,   native: true,  wild: true}
+  kiwi:                         {taxon: bird,   native: true,  wild: true}
+  little_blue_penguin:          {taxon: bird,   native: true,  wild: true}
+  lizard:                       {taxon: other,  native: null,  wild: null}
+  long_tailed_cuckoo:           {taxon: bird,   native: true,  wild: true}
+  magpie:                       {taxon: bird,   native: false, wild: true}
+  mallard:                      {taxon: bird,   native: false, wild: true}
+  mohua:                        {taxon: bird,   native: true,  wild: true}
+  morepork:                     {taxon: bird,   native: true,  wild: true}
+  moth:                         {taxon: other,  native: null,  wild: null}
+  mouse:                        {taxon: mammal, native: false, wild: true}
+  myna:                         {taxon: bird,   native: false, wild: true}
+  nz_falcon:                    {taxon: bird,   native: true,  wild: true}
+  oystercatcher:                {taxon: bird,   native: true,  wild: true}
+  paradise_duck:                {taxon: bird,   native: true,  wild: true}
+  parakeet:                     {taxon: bird,   native: true,  wild: true}
+  pateke:                       {taxon: bird,   native: true,  wild: true}
+  pheasant:                     {taxon: bird,   native: false, wild: true}
+  pig:                          {taxon: mammal, native: false, wild: true}
+  pipit:                        {taxon: bird,   native: true,  wild: true}
+  plover:                       {taxon: bird,   native: true,  wild: true}
+  possum:                       {taxon: mammal, native: false, wild: true}
+  pukeko:                       {taxon: bird,   native: true,  wild: true}
+  quail_brown:                  {taxon: bird,   native: false, wild: true}
+  quail_california:             {taxon: bird,   native: false, wild: true}
+  rabbit:                       {taxon: mammal, native: false, wild: true}
+  rat:                          {taxon: mammal, native: false, wild: true}
+  redpoll:                      {taxon: bird,   native: false, wild: true}
+  rifleman:                     {taxon: bird,   native: true,  wild: true}
+  robin:                        {taxon: bird,   native: true,  wild: true}
+  rosella:                      {taxon: bird,   native: false, wild: true}
+  sealion:                      {taxon: mammal, native: true,  wild: true}
+  shag:                         {taxon: bird,   native: true,  wild: true}
+  sheep:                        {taxon: mammal, native: false, wild: false}
+  shore_plover:                 {taxon: bird,   native: true,  wild: true}
+  silvereye:                    {taxon: bird,   native: true,  wild: true}
+  skink:                        {taxon: other,  native: null,  wild: null}
+  sparrow:                      {taxon: bird,   native: false, wild: true}
+  spotted_dove:                 {taxon: bird,   native: false, wild: true}
+  spurwing_plover:               {taxon: bird,   native: true,  wild: true}
+  starling:                     {taxon: bird,   native: false, wild: true}
+  stilt:                        {taxon: bird,   native: true,  wild: true}
+  stoat:                        {taxon: mammal, native: false, wild: true}
+  swallow:                      {taxon: bird,   native: true,  wild: true}
+  swan:                         {taxon: bird,   native: true,  wild: true}
+  tahr:                         {taxon: mammal, native: false, wild: true}
+  takahe:                       {taxon: bird,   native: true,  wild: true}
+  thrush:                       {taxon: bird,   native: false, wild: true}
+  tieke:                        {taxon: bird,   native: true,  wild: true}
+  tomtit:                       {taxon: bird,   native: true,  wild: true}
+  tui:                          {taxon: bird,   native: true,  wild: true}
+  wallaby:                      {taxon: mammal, native: false, wild: true}
+  weasel:                       {taxon: mammal, native: false, wild: true}
+  weka:                         {taxon: bird,   native: true,  wild: true}
+  white_faced_heron:            {taxon: bird,   native: true,  wild: true}
+  white_tailed_deer:            {taxon: mammal, native: false, wild: true}
+  whitehead:                    {taxon: bird,   native: true,  wild: true}
+  wrybill:                      {taxon: bird,   native: true,  wild: true}
+  yellow_eyed_penguin:           {taxon: bird,   native: true,  wild: true}
+  yellowhammer:                  {taxon: bird,   native: false, wild: true}
