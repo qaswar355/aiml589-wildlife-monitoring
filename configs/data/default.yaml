@@ -1,24 +1,32 @@
 # @package _global_
 data:
-  lila_metadata_url: "s3://us-west-2.opendata.source.coop/agentmorris/lila-wildlife/nz-trailcams"
+  # Source dataset. file_name in the metadata is a path relative to this
+  # prefix. The HTTPS form is empirically verified in src/data/ingest.py —
+  # do not assume a different mirror resolves the same way.
+  source:
+    lila_s3_uri: "s3://us-west-2.opendata.source.coop/agentmorris/lila-wildlife/nz-trailcams"
+    https_base_url: "https://storage.googleapis.com/public-datasets-lila/nz-trailcams"
+    metadata_json: "data/trail_camera_images_of_new_zealand_animals_1.00.json"
+    md_results_json: "data/boxes/nz-trailcams_mdv5a.0.0_results.filtered_rde_0.150_0.850_40_0.200.json"
+
+  flat_metadata_path: "data/nz_flat.parquet"
+  md_boxes_path: "data/md_boxes.parquet"
   manifest_path: "data/manifest.csv"
-  split_ratios: [0.70, 0.15, 0.15]  # train / val / test (site-level)
-  per_species_cap: 8000              # max images per mammal species
-  image_size: 224
+  taxonomy_path: "configs/data/species_taxonomy.yaml"
+  class_map_path: "configs/data/class_map.yaml"
 
-  mammals:  # invasive predators → label 1
-    - mouse
-    - possum
-    - rat
-    - stoat
-    - ferret
-    - feral_cat
-    - hedgehog
-    - weasel
+  image_size: 300                # EfficientNet-B3 native resolution
+  max_images_per_species: 2000   # symmetric cap — same rule for every species
+  frames_per_event: 1
+  burst_window_seconds: 60
+  md_conf_threshold: 0.2
 
-  excluded:  # contaminate binary boundary
-    - human
-    - vehicle
-    - deer
-    - cattle
-    - sheep
+  split:
+    test_size: 0.2
+    val_size: 0.1
+    group_col: location
+    seed: 42
+
+  seasonal_experiment:
+    train_on: [spring, summer]
+    test_on: [autumn, winter]

@@ -1,11 +1,25 @@
 stages:
-  ingest:
-    cmd: python -m src.data.filter_and_sample
+  manifest:
+    cmd: python -m src.data.build_manifest
     deps:
-      - src/data/filter_and_sample.py
+      - src/data/build_manifest.py
+      - src/data/species_map.py
+      - src/data/events.py
       - configs/data/default.yaml
+      - configs/data/species_taxonomy.yaml
+      - configs/data/class_map.yaml
+      - data/nz_flat.parquet
+      - data/md_boxes.parquet
     outs:
       - data/manifest.csv
+
+  ingest:
+    cmd: python -m src.data.ingest
+    deps:
+      - src/data/ingest.py
+      - data/manifest.csv
+    outs:
+      - data/shards/
 
   preprocess:
     cmd: python -m src.data.preprocessing
@@ -15,20 +29,13 @@ stages:
     outs:
       - data/processed/
 
-  split:
-    cmd: python -m src.data.splitting
-    deps:
-      - src/data/splitting.py
-      - data/manifest.csv
-    outs:
-      - data/splits/
-
   train:
     cmd: python -m src.training.train
     deps:
       - src/training/train.py
       - src/models/efficientnet.py
-      - data/splits/
+      - data/manifest.csv
+      - data/shards/
       - configs/training/default.yaml
       - configs/model/efficientnet_b3.yaml
     outs:
