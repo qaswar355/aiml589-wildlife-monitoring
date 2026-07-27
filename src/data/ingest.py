@@ -210,7 +210,7 @@ def main() -> None:
     base_url = cfg["source"]["https_base_url"]
     verify_url_pattern(base_url, manifest.iloc[0]["file_name"])
 
-    out_dir = Path("data/shards")
+    out_dir = Path(cfg["shards_dir"])
     out_dir.mkdir(parents=True, exist_ok=True)
 
     shards = iter_shards(manifest, DEFAULT_IMAGES_PER_SHARD)
