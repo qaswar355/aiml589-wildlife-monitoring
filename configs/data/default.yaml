@@ -15,6 +15,11 @@ data:
   taxonomy_path: "configs/data/species_taxonomy.yaml"
   class_map_path: "configs/data/class_map.yaml"
 
+  # Local disk here; on ECS override to the NFS home path so shards persist
+  # across runs instead of landing on shared/transient scratch (e.g.
+  # /home/almouqasw/aiml589-data/shards).
+  shards_dir: "data/shards"
+
   image_size: 300                # EfficientNet-B3 native resolution
   max_images_per_species: 2000   # symmetric cap — same rule for every species
   frames_per_event: 1
