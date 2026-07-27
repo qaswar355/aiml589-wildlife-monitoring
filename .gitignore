@@ -26,6 +26,7 @@ env/
 # MLflow local runs (if running tracking server locally)
 mlruns/
 mlartifacts/
+mlflow.db
 
 # Jupyter
 .ipynb_checkpoints/
