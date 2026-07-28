@@ -40,6 +40,7 @@ to a queue.
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import mlflow
@@ -48,6 +49,7 @@ import pytorch_lightning as pl
 import torch
 import torch.nn as nn
 import yaml
+from sklearn.metrics import accuracy_score, confusion_matrix, f1_score, precision_score, recall_score
 from torch.utils.data import DataLoader
 
 from src.models.efficientnet import WildlifeClassifier
@@ -136,18 +138,56 @@ def _resolve_accelerator() -> str:
     return "cpu"
 
 
+def _resolve_torch_device() -> torch.device:
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    if torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
+
+
+def compute_val_metrics(
+    module: WildlifeLightningModule, val_loader: DataLoader, threshold: float = 0.5
+) -> dict:
+    """Precision/recall/F1/confusion matrix on a validation set -- accuracy
+    alone doesn't tell you whether the model is actually catching mammals,
+    same reasoning as src/training/baselines.py."""
+    device = _resolve_torch_device()
+    module.to(device)
+    module.eval()
+
+    all_true: list[int] = []
+    all_pred: list[int] = []
+    with torch.no_grad():
+        for x, y in val_loader:
+            probs = torch.sigmoid(module(x.to(device))).cpu()
+            all_pred.extend((probs >= threshold).int().tolist())
+            all_true.extend(y.int().tolist())
+
+    return {
+        "accuracy": accuracy_score(all_true, all_pred),
+        "precision": precision_score(all_true, all_pred, zero_division=0),
+        "recall": recall_score(all_true, all_pred, zero_division=0),
+        "f1": f1_score(all_true, all_pred, zero_division=0),
+        "confusion_matrix": confusion_matrix(all_true, all_pred, labels=[0, 1]),
+    }
+
+
 def main(max_epochs: int | None = None) -> None:
     data_cfg = _load_yaml(DEFAULT_DATA_CONFIG)["data"]
     training_cfg = _load_yaml(DEFAULT_TRAINING_CONFIG)["training"]
     model_cfg = _load_yaml(DEFAULT_MODEL_CONFIG)["model"]
 
+    num_workers = int(os.environ.get("NUM_WORKERS", training_cfg.get("num_workers", 0)))
+
     train_loader, val_loader, train_ds, val_ds = build_dataloaders(
         manifest_path=data_cfg["manifest_path"],
         shards_dir=data_cfg["shards_dir"],
         batch_size=training_cfg["batch_size"],
+        num_workers=num_workers,
     )
 
-    print(f"images available in ingested shards so far: train={len(train_ds)}  val={len(val_ds)}")
+    print(f"images available in ingested shards so far: train={len(train_ds)}  val={len(val_ds)}  (num_workers={num_workers})")
     if len(train_ds) == 0:
         raise RuntimeError(
             f"No training images found in {data_cfg['shards_dir']} yet — has "
@@ -192,6 +232,18 @@ def main(max_epochs: int | None = None) -> None:
             }
         )
         trainer.fit(module, train_dataloaders=train_loader, val_dataloaders=val_loader)
+
+        val_metrics = compute_val_metrics(module, val_loader)
+        mlflow.log_metric("val_accuracy_final", val_metrics["accuracy"])
+        mlflow.log_metric("val_precision_final", val_metrics["precision"])
+        mlflow.log_metric("val_recall_final", val_metrics["recall"])
+        mlflow.log_metric("val_f1_final", val_metrics["f1"])
+        print(
+            f"[val, final] accuracy={val_metrics['accuracy']:.4f} "
+            f"precision={val_metrics['precision']:.4f} recall={val_metrics['recall']:.4f} "
+            f"f1={val_metrics['f1']:.4f}"
+        )
+        print(f"  confusion matrix (rows=true, cols=pred) [bird, mammal]:\n{val_metrics['confusion_matrix']}")
 
     checkpoint_path = Path("models/checkpoint.pt")
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)

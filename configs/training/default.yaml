@@ -8,6 +8,10 @@ training:
   scheduler: cosine_annealing
   early_stopping_patience: 5
   accelerator: auto       # "gpu" on HPC/Azure, "mps" on Apple Silicon, "cpu" fallback
+  # 0 is fastest on macOS (spawn-based worker startup doesn't pay off at this
+  # scale); Linux/HPC forks workers cheaply, so override with NUM_WORKERS=<n>
+  # at the command line there instead of editing this default.
+  num_workers: 0
 
 mlflow:
   experiment_name: wildlife_classifier
