@@ -1,0 +1,59 @@
+schema: '2.0'
+stages:
+  manifest:
+    cmd: python -m src.data.build_manifest
+    deps:
+    - path: configs/data/class_map.yaml
+      hash: md5
+      md5: b3c4631c6c53f6843dd664a440c69996
+      size: 926
+    - path: configs/data/default.yaml
+      hash: md5
+      md5: 442e158ad376ecb3c145e3b4f9b496c9
+      size: 1446
+    - path: configs/data/species_taxonomy.yaml
+      hash: md5
+      md5: 68ba68fbca6ba60572ab034f26b3f0f4
+      size: 9200
+    - path: data/md_boxes.parquet
+      hash: md5
+      md5: 693e521c1afa659710efdbb5d030c056
+      size: 98616336
+    - path: data/nz_flat.parquet
+      hash: md5
+      md5: 942c0fbf7788b0ca373b5446637ea3c5
+      size: 186877773
+    - path: src/data/build_manifest.py
+      hash: md5
+      md5: 7ab3a8a6b419554424d36e5f4b889fcc
+      size: 13679
+    - path: src/data/events.py
+      hash: md5
+      md5: ef7e403212fcb00e57bbdb32b41da194
+      size: 2714
+    - path: src/data/species_map.py
+      hash: md5
+      md5: 6f64f72cea1504d2e688b7248489d117
+      size: 7759
+    outs:
+    - path: data/manifest.csv
+      hash: md5
+      md5: f91ab2e986aa1f2118c95250dfd316b5
+      size: 20940315
+  ingest:
+    cmd: python -m src.data.ingest
+    deps:
+    - path: data/manifest.csv
+      hash: md5
+      md5: f91ab2e986aa1f2118c95250dfd316b5
+      size: 20940315
+    - path: src/data/ingest.py
+      hash: md5
+      md5: ae7ddcd37607ddbd3f0dd2cf3a790401
+      size: 9128
+    outs:
+    - path: data/shards/
+      hash: md5
+      md5: 64b3252bac126b87135532343ea19e1b.dir
+      size: 1539595511
+      nfiles: 84
