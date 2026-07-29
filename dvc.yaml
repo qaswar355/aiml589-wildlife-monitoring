@@ -45,11 +45,19 @@ stages:
     cmd: python -m src.training.evaluate
     deps:
       - src/training/evaluate.py
+      - src/training/dataset.py
+      - src/models/efficientnet.py
       - models/checkpoint.pt
-      - data/splits/
+      - data/manifest.csv
+      - data/shards/
+      - configs/inference/threshold_config.yaml
+    outs:
+      - data/predictions/test_predictions.csv
     metrics:
       - metrics/eval.json:
           cache: false
     plots:
       - metrics/roc_curve.csv:
+          cache: false
+      - metrics/pr_curve.csv:
           cache: false
