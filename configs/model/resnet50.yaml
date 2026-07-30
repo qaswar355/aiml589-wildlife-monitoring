@@ -1,0 +1,7 @@
+# @package _global_
+model:
+  architecture: resnet50
+  pretrained: true
+  num_classes: 1          # binary sigmoid output
+  dropout_rate: 0.3       # used for MC Dropout uncertainty at inference
+  mc_dropout_passes: 20   # forward passes for uncertainty estimation

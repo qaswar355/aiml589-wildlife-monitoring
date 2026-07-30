@@ -29,35 +29,68 @@ stages:
     outs:
       - data/processed/
 
-  train:
-    cmd: python -m src.training.train
+  train_efficientnet_b3:
+    cmd: python -m src.training.train configs/model/efficientnet_b3.yaml
     deps:
       - src/training/train.py
-      - src/models/efficientnet.py
+      - src/models/classifier.py
       - data/manifest.csv
       - data/shards/
       - configs/training/default.yaml
       - configs/model/efficientnet_b3.yaml
     outs:
-      - models/checkpoint.pt
+      - models/checkpoint_efficientnet_b3.pt
 
-  evaluate:
-    cmd: python -m src.training.evaluate
+  evaluate_efficientnet_b3:
+    cmd: python -m src.training.evaluate efficientnet_b3
     deps:
       - src/training/evaluate.py
       - src/training/dataset.py
-      - src/models/efficientnet.py
-      - models/checkpoint.pt
+      - src/models/classifier.py
+      - models/checkpoint_efficientnet_b3.pt
       - data/manifest.csv
       - data/shards/
       - configs/inference/threshold_config.yaml
     outs:
-      - data/predictions/test_predictions.csv
+      - data/predictions/test_predictions_efficientnet_b3.csv
     metrics:
-      - metrics/eval.json:
+      - metrics/efficientnet_b3/eval.json:
           cache: false
     plots:
-      - metrics/roc_curve.csv:
+      - metrics/efficientnet_b3/roc_curve.csv:
           cache: false
-      - metrics/pr_curve.csv:
+      - metrics/efficientnet_b3/pr_curve.csv:
+          cache: false
+
+  train_resnet50:
+    cmd: python -m src.training.train configs/model/resnet50.yaml
+    deps:
+      - src/training/train.py
+      - src/models/classifier.py
+      - data/manifest.csv
+      - data/shards/
+      - configs/training/default.yaml
+      - configs/model/resnet50.yaml
+    outs:
+      - models/checkpoint_resnet50.pt
+
+  evaluate_resnet50:
+    cmd: python -m src.training.evaluate resnet50
+    deps:
+      - src/training/evaluate.py
+      - src/training/dataset.py
+      - src/models/classifier.py
+      - models/checkpoint_resnet50.pt
+      - data/manifest.csv
+      - data/shards/
+      - configs/inference/threshold_config.yaml
+    outs:
+      - data/predictions/test_predictions_resnet50.csv
+    metrics:
+      - metrics/resnet50/eval.json:
+          cache: false
+    plots:
+      - metrics/resnet50/roc_curve.csv:
+          cache: false
+      - metrics/resnet50/pr_curve.csv:
           cache: false

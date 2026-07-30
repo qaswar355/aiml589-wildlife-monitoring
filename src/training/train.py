@@ -28,11 +28,16 @@ ratio with the longer side capped at 300px. A production preprocessing
 step should crop/pad instead of stretching — fine for a wiring smoke
 test, worth revisiting before reporting real accuracy numbers.
 
-Entry point: `python -m src.training.train`
+Entry point: `python -m src.training.train [model-config-path]`
              (reads configs/data/default.yaml, configs/training/default.yaml,
-             configs/model/efficientnet_b3.yaml directly — not yet composed
-             through Hydra's config groups, same pragmatic choice as
-             src/data/build_manifest.py)
+             and configs/model/efficientnet_b3.yaml by default -- pass a
+             different model config path, e.g.
+             configs/model/resnet50.yaml, to train that architecture
+             instead. Not yet composed through Hydra's config groups,
+             same pragmatic choice as src/data/build_manifest.py.
+             Checkpoint is written to models/checkpoint_<architecture>.pt
+             so runs for different architectures don't overwrite each
+             other.)
 
 HPC usage: ECS GPU servers are shared, cooperative-etiquette machines with
 no job scheduler — run via `tmux`, pinned to a specific GPU, not submitted
@@ -52,7 +57,7 @@ import yaml
 from sklearn.metrics import accuracy_score, confusion_matrix, f1_score, precision_score, recall_score
 from torch.utils.data import DataLoader
 
-from src.models.efficientnet import WildlifeClassifier
+from src.models.classifier import WildlifeClassifier
 from src.training.dataset import ShardDataset
 
 DEFAULT_DATA_CONFIG = "configs/data/default.yaml"
@@ -71,13 +76,16 @@ class WildlifeLightningModule(pl.LightningModule):
         learning_rate: float,
         weight_decay: float,
         max_epochs: int,
+        architecture: str = "efficientnet_b3",
         pretrained: bool = True,
         dropout_rate: float = 0.3,
         pos_weight: float | None = None,
     ) -> None:
         super().__init__()
         self.save_hyperparameters()
-        self.model = WildlifeClassifier(pretrained=pretrained, dropout_rate=dropout_rate)
+        self.model = WildlifeClassifier(
+            architecture=architecture, pretrained=pretrained, dropout_rate=dropout_rate
+        )
         pw = torch.tensor(pos_weight) if pos_weight is not None else None
         self.criterion = nn.BCEWithLogitsLoss(pos_weight=pw)
         self._train_losses: list[float] = []
@@ -173,10 +181,11 @@ def compute_val_metrics(
     }
 
 
-def main(max_epochs: int | None = None) -> None:
+def main(max_epochs: int | None = None, model_config_path: str = DEFAULT_MODEL_CONFIG) -> None:
     data_cfg = _load_yaml(DEFAULT_DATA_CONFIG)["data"]
     training_cfg = _load_yaml(DEFAULT_TRAINING_CONFIG)["training"]
-    model_cfg = _load_yaml(DEFAULT_MODEL_CONFIG)["model"]
+    model_cfg = _load_yaml(model_config_path)["model"]
+    architecture = model_cfg["architecture"]
 
     num_workers = int(os.environ.get("NUM_WORKERS", training_cfg.get("num_workers", 0)))
 
@@ -205,6 +214,7 @@ def main(max_epochs: int | None = None) -> None:
         learning_rate=training_cfg["learning_rate"],
         weight_decay=training_cfg["weight_decay"],
         max_epochs=epochs,
+        architecture=architecture,
         pretrained=model_cfg["pretrained"],
         dropout_rate=model_cfg["dropout_rate"],
         pos_weight=pos_weight,
@@ -218,10 +228,10 @@ def main(max_epochs: int | None = None) -> None:
         enable_checkpointing=False,
     )
 
-    with mlflow.start_run(run_name="efficientnet_b3_smoke_test"):
+    with mlflow.start_run(run_name=f"{architecture}_full_run"):
         mlflow.log_params(
             {
-                "architecture": model_cfg["architecture"],
+                "architecture": architecture,
                 "pretrained": model_cfg["pretrained"],
                 "batch_size": training_cfg["batch_size"],
                 "learning_rate": training_cfg["learning_rate"],
@@ -245,11 +255,14 @@ def main(max_epochs: int | None = None) -> None:
         )
         print(f"  confusion matrix (rows=true, cols=pred) [bird, mammal]:\n{val_metrics['confusion_matrix']}")
 
-    checkpoint_path = Path("models/checkpoint.pt")
+    checkpoint_path = Path(f"models/checkpoint_{architecture}.pt")
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
     torch.save(module.model.state_dict(), checkpoint_path)
     print(f"wrote {checkpoint_path}")
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+
+    model_config = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_MODEL_CONFIG
+    main(model_config_path=model_config)
