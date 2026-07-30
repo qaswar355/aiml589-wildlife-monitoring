@@ -1,18 +1,21 @@
 """
 Model evaluation: per-image predictions, aggregate metrics, and plots.
 
-Loads a trained checkpoint and runs it over the manifest's test split,
-producing:
-  - data/predictions/test_predictions.csv -- one row per test image:
-      image_id, site_id, species, season, true_label, pred_label,
-      confidence, probability. DVC-tracked (see dvc.yaml), so it's
-      reproducible and shareable without re-running training.
-  - metrics/eval.json -- precision/recall/F1/accuracy/ROC-AUC/PR-AUC +
-      confusion matrix in absolute counts (accuracy intentionally not
-      the headline number, same reasoning as baselines.py)
-  - metrics/roc_curve.csv, metrics/pr_curve.csv -- DVC-plottable curve
-      points, plus rendered .png versions and a confusion matrix heatmap
-      for direct use in the report
+Loads a trained checkpoint (models/checkpoint_<architecture>.pt) and
+runs it over the manifest's test split, producing, namespaced by
+architecture so multiple models' results sit side by side rather than
+overwriting each other:
+  - data/predictions/test_predictions_<architecture>.csv -- one row per
+      test image: image_id, site_id, species, season, true_label,
+      pred_label, confidence, probability. DVC-tracked (see dvc.yaml),
+      so it's reproducible and shareable without re-running training.
+  - metrics/<architecture>/eval.json -- precision/recall/F1/accuracy/
+      ROC-AUC/PR-AUC + confusion matrix in absolute counts (accuracy
+      intentionally not the headline number, same reasoning as
+      baselines.py)
+  - metrics/<architecture>/roc_curve.csv, pr_curve.csv -- DVC-plottable
+      curve points, plus rendered .png versions and a confusion matrix
+      heatmap for direct use in the report
 
 `probability` is the raw sigmoid output (P(mammal)); `confidence` is the
 probability of whichever class was actually predicted (max(p, 1-p)) --
@@ -22,9 +25,11 @@ the model leaned.
 
 Threshold sweep / per-zone thresholds (configs/inference/threshold_config.yaml)
 and the seasonal three-way ablation are follow-up work, not this pass --
-this evaluates the single trained checkpoint at the default threshold.
+this evaluates a single trained checkpoint at the default threshold.
 
-Run: python -m src.training.evaluate
+Run: python -m src.training.evaluate [architecture]
+     (architecture defaults to efficientnet_b3; pass resnet50 to
+     evaluate that checkpoint instead)
 """
 from __future__ import annotations
 
@@ -52,14 +57,12 @@ from sklearn.metrics import (
 )
 from torch.utils.data import DataLoader
 
-from src.models.efficientnet import WildlifeClassifier
+from src.models.classifier import WildlifeClassifier
 from src.training.dataset import ShardDataset
 
 DEFAULT_DATA_CONFIG = "configs/data/default.yaml"
 DEFAULT_THRESHOLD_CONFIG = "configs/inference/threshold_config.yaml"
-DEFAULT_CHECKPOINT = "models/checkpoint.pt"
-PREDICTIONS_PATH = Path("data/predictions/test_predictions.csv")
-METRICS_DIR = Path("metrics")
+DEFAULT_ARCHITECTURE = "efficientnet_b3"
 
 
 def _load_yaml(path: str) -> dict:
@@ -117,12 +120,17 @@ def _save_plots(y_true, y_pred, fpr, tpr, roc_auc, prec, rec, pr_auc, out_dir: P
 
 
 def run_evaluation(
-    checkpoint_path: str = DEFAULT_CHECKPOINT,
+    architecture: str = DEFAULT_ARCHITECTURE,
+    checkpoint_path: str | None = None,
     manifest_path: str | None = None,
     shards_dir: str | None = None,
     threshold: float | None = None,
     batch_size: int = 32,
 ) -> dict:
+    checkpoint_path = checkpoint_path or f"models/checkpoint_{architecture}.pt"
+    predictions_path = Path(f"data/predictions/test_predictions_{architecture}.csv")
+    metrics_dir = Path("metrics") / architecture
+
     data_cfg = _load_yaml(DEFAULT_DATA_CONFIG)["data"]
     manifest_path = manifest_path or data_cfg["manifest_path"]
     shards_dir = shards_dir or data_cfg["shards_dir"]
@@ -137,7 +145,7 @@ def run_evaluation(
     test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False, num_workers=0)
 
     device = _resolve_torch_device()
-    model = WildlifeClassifier()
+    model = WildlifeClassifier(architecture=architecture)
     model.load_state_dict(torch.load(checkpoint_path, map_location=device, weights_only=True))
     model.to(device)
     model.eval()
@@ -157,8 +165,8 @@ def run_evaluation(
     predictions = rows[
         ["image_id", "site_id", "species", "season", "true_label", "pred_label", "confidence", "probability"]
     ]
-    PREDICTIONS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    predictions.to_csv(PREDICTIONS_PATH, index=False)
+    predictions_path.parent.mkdir(parents=True, exist_ok=True)
+    predictions.to_csv(predictions_path, index=False)
 
     y_true = predictions["true_label"].to_numpy()
     y_pred = predictions["pred_label"].to_numpy()
@@ -181,38 +189,42 @@ def run_evaluation(
         "confusion_matrix": confusion_matrix(y_true, y_pred, labels=[0, 1]).tolist(),
     }
 
-    METRICS_DIR.mkdir(parents=True, exist_ok=True)
-    (METRICS_DIR / "eval.json").write_text(json.dumps(metrics, indent=2))
-    pd.DataFrame({"fpr": fpr, "tpr": tpr}).to_csv(METRICS_DIR / "roc_curve.csv", index=False)
-    pd.DataFrame({"precision": prec, "recall": rec}).to_csv(METRICS_DIR / "pr_curve.csv", index=False)
-    _save_plots(y_true, y_pred, fpr, tpr, roc_auc, prec, rec, pr_auc, METRICS_DIR)
+    metrics_dir.mkdir(parents=True, exist_ok=True)
+    (metrics_dir / "eval.json").write_text(json.dumps(metrics, indent=2))
+    pd.DataFrame({"fpr": fpr, "tpr": tpr}).to_csv(metrics_dir / "roc_curve.csv", index=False)
+    pd.DataFrame({"precision": prec, "recall": rec}).to_csv(metrics_dir / "pr_curve.csv", index=False)
+    _save_plots(y_true, y_pred, fpr, tpr, roc_auc, prec, rec, pr_auc, metrics_dir)
 
-    with mlflow.start_run(run_name="evaluate_test_set"):
+    with mlflow.start_run(run_name=f"evaluate_{architecture}_test_set"):
+        mlflow.log_param("architecture", architecture)
         mlflow.log_param("checkpoint_path", str(checkpoint_path))
         mlflow.log_param("threshold", threshold)
         for key in ("accuracy", "precision", "recall", "f1", "roc_auc", "pr_auc"):
             mlflow.log_metric(key, metrics[key])
-        mlflow.log_artifact(str(PREDICTIONS_PATH))
-        mlflow.log_artifact(str(METRICS_DIR / "eval.json"))
-        mlflow.log_artifact(str(METRICS_DIR / "roc_curve.csv"))
-        mlflow.log_artifact(str(METRICS_DIR / "pr_curve.csv"))
-        mlflow.log_artifact(str(METRICS_DIR / "confusion_matrix.png"))
-        mlflow.log_artifact(str(METRICS_DIR / "roc_curve.png"))
-        mlflow.log_artifact(str(METRICS_DIR / "pr_curve.png"))
+        mlflow.log_artifact(str(predictions_path))
+        mlflow.log_artifact(str(metrics_dir / "eval.json"))
+        mlflow.log_artifact(str(metrics_dir / "roc_curve.csv"))
+        mlflow.log_artifact(str(metrics_dir / "pr_curve.csv"))
+        mlflow.log_artifact(str(metrics_dir / "confusion_matrix.png"))
+        mlflow.log_artifact(str(metrics_dir / "roc_curve.png"))
+        mlflow.log_artifact(str(metrics_dir / "pr_curve.png"))
 
     print(
-        f"[test] accuracy={metrics['accuracy']:.4f} precision={metrics['precision']:.4f} "
+        f"[test, {architecture}] accuracy={metrics['accuracy']:.4f} precision={metrics['precision']:.4f} "
         f"recall={metrics['recall']:.4f} f1={metrics['f1']:.4f} "
         f"roc_auc={metrics['roc_auc']:.4f} pr_auc={metrics['pr_auc']:.4f}"
     )
     print(f"confusion matrix (rows=true, cols=pred) [bird, mammal]:\n{metrics['confusion_matrix']}")
-    print(f"wrote {PREDICTIONS_PATH}, {METRICS_DIR}/eval.json, roc_curve.{{csv,png}}, pr_curve.{{csv,png}}, confusion_matrix.png")
+    print(f"wrote {predictions_path}, {metrics_dir}/eval.json, roc_curve.{{csv,png}}, pr_curve.{{csv,png}}, confusion_matrix.png")
 
     return metrics
 
 
 def main() -> None:
-    run_evaluation()
+    import sys
+
+    architecture = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_ARCHITECTURE
+    run_evaluation(architecture=architecture)
 
 
 if __name__ == "__main__":
