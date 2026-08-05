@@ -39,20 +39,59 @@ def _log_split_metrics(split_name: str, y_true, y_pred) -> dict:
     prec = precision_score(y_true, y_pred, zero_division=0)
     rec = recall_score(y_true, y_pred, zero_division=0)
     f1 = f1_score(y_true, y_pred, zero_division=0)
+    prec_macro = precision_score(y_true, y_pred, average="macro", zero_division=0)
+    rec_macro = recall_score(y_true, y_pred, average="macro", zero_division=0)
+    f1_macro = f1_score(y_true, y_pred, average="macro", zero_division=0)
+    prec_micro = precision_score(y_true, y_pred, average="micro", zero_division=0)
+    rec_micro = recall_score(y_true, y_pred, average="micro", zero_division=0)
+    f1_micro = f1_score(y_true, y_pred, average="micro", zero_division=0)
+    prec_per_class = precision_score(y_true, y_pred, average=None, zero_division=0)
+    rec_per_class = recall_score(y_true, y_pred, average=None, zero_division=0)
+    f1_per_class = f1_score(y_true, y_pred, average=None, zero_division=0)
     cm = confusion_matrix(y_true, y_pred, labels=LABELS)
 
     mlflow.log_metric(f"{split_name}_accuracy", acc)
     mlflow.log_metric(f"{split_name}_precision", prec)
     mlflow.log_metric(f"{split_name}_recall", rec)
     mlflow.log_metric(f"{split_name}_f1", f1)
+    mlflow.log_metric(f"{split_name}_precision_macro", prec_macro)
+    mlflow.log_metric(f"{split_name}_recall_macro", rec_macro)
+    mlflow.log_metric(f"{split_name}_f1_macro", f1_macro)
+    mlflow.log_metric(f"{split_name}_precision_micro", prec_micro)
+    mlflow.log_metric(f"{split_name}_recall_micro", rec_micro)
+    mlflow.log_metric(f"{split_name}_f1_micro", f1_micro)
 
     print(
         f"[{split_name}] accuracy={acc:.4f} precision={prec:.4f} "
         f"recall={rec:.4f} f1={f1:.4f}"
     )
+    print(f"  macro:  precision={prec_macro:.4f} recall={rec_macro:.4f} f1={f1_macro:.4f}")
+    print(
+        f"  micro:  precision={prec_micro:.4f} recall={rec_micro:.4f} f1={f1_micro:.4f}  "
+        "(== accuracy in binary classification)"
+    )
+    print(
+        f"  per-class [bird, mammal]:  precision={prec_per_class.tolist()}  "
+        f"recall={rec_per_class.tolist()}  f1={f1_per_class.tolist()}"
+    )
     print(f"  confusion matrix (rows=true, cols=pred) [bird, mammal]:\n{cm}")
 
-    return {"accuracy": acc, "precision": prec, "recall": rec, "f1": f1, "confusion_matrix": cm.tolist()}
+    return {
+        "accuracy": acc,
+        "precision": prec,
+        "recall": rec,
+        "f1": f1,
+        "precision_macro": prec_macro,
+        "recall_macro": rec_macro,
+        "f1_macro": f1_macro,
+        "precision_micro": prec_micro,
+        "recall_micro": rec_micro,
+        "f1_micro": f1_micro,
+        "precision_per_class": prec_per_class.tolist(),
+        "recall_per_class": rec_per_class.tolist(),
+        "f1_per_class": f1_per_class.tolist(),
+        "confusion_matrix": cm.tolist(),
+    }
 
 
 def run_majority_class_baseline(manifest_path: str = MANIFEST_PATH) -> dict:

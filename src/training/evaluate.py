@@ -1,21 +1,27 @@
 """
 Model evaluation: per-image predictions, aggregate metrics, and plots.
 
-Loads a trained checkpoint (models/checkpoint_<architecture>.pt) and
-runs it over the manifest's test split, producing, namespaced by
-architecture so multiple models' results sit side by side rather than
-overwriting each other:
-  - data/predictions/test_predictions_<architecture>.csv -- one row per
-      test image: image_id, site_id, species, season, true_label,
-      pred_label, confidence, probability. DVC-tracked (see dvc.yaml),
-      so it's reproducible and shareable without re-running training.
-  - metrics/<architecture>/eval.json -- precision/recall/F1/accuracy/
-      ROC-AUC/PR-AUC + confusion matrix in absolute counts (accuracy
-      intentionally not the headline number, same reasoning as
-      baselines.py)
-  - metrics/<architecture>/roc_curve.csv, pr_curve.csv -- DVC-plottable
-      curve points, plus rendered .png versions and a confusion matrix
-      heatmap for direct use in the report
+Loads a trained checkpoint and runs it over a test set (either the
+manifest's site-based "test" split, or the seasonal experiment's
+autumn/winter set -- see src/training/seasonal_experiment.py), producing,
+namespaced by `tag` so multiple models/experiments' results sit side by
+side rather than overwriting each other:
+  - data/predictions/test_predictions_<tag>.csv -- one row per test
+      image: image_id, site_id, species, season, true_label, pred_label,
+      confidence, probability. DVC-tracked (see dvc.yaml), so it's
+      reproducible and shareable without re-running training.
+  - metrics/<tag>/eval.json -- precision/recall/F1/accuracy/ROC-AUC/PR-AUC
+      (binary, i.e. mammal-class-only) PLUS macro- and micro-averaged
+      precision/recall/F1, and confusion matrix in absolute counts.
+      Accuracy and micro-average are intentionally not the headline
+      numbers -- micro-average is mathematically identical to accuracy
+      in binary classification, so it's reported for transparency, not
+      as new information. Macro-average is the informative one for the
+      imbalance story: it weights bird and mammal equally regardless of
+      which has more test examples.
+  - metrics/<tag>/roc_curve.csv, pr_curve.csv -- DVC-plottable curve
+      points, plus rendered .png versions and a confusion matrix heatmap
+      for direct use in the report
 
 `probability` is the raw sigmoid output (P(mammal)); `confidence` is the
 probability of whichever class was actually predicted (max(p, 1-p)) --
@@ -24,12 +30,14 @@ what lets a review queue flag "low confidence" regardless of which way
 the model leaned.
 
 Threshold sweep / per-zone thresholds (configs/inference/threshold_config.yaml)
-and the seasonal three-way ablation are follow-up work, not this pass --
-this evaluates a single trained checkpoint at the default threshold.
+is follow-up work, not this pass -- this evaluates a single trained
+checkpoint at the default threshold.
 
-Run: python -m src.training.evaluate [architecture]
-     (architecture defaults to efficientnet_b3; pass resnet50 to
-     evaluate that checkpoint instead)
+Run: python -m src.training.evaluate [architecture] [test_split]
+     (architecture defaults to efficientnet_b3; test_split defaults to
+     "test" -- the site-based split -- pass "seasonal" to evaluate
+     against the autumn/winter set instead, matching a checkpoint
+     produced by seasonal_experiment.py)
 """
 from __future__ import annotations
 
@@ -63,6 +71,7 @@ from src.training.dataset import ShardDataset
 DEFAULT_DATA_CONFIG = "configs/data/default.yaml"
 DEFAULT_THRESHOLD_CONFIG = "configs/inference/threshold_config.yaml"
 DEFAULT_ARCHITECTURE = "efficientnet_b3"
+COOL_SEASONS = ("autumn", "winter")
 
 
 def _load_yaml(path: str) -> dict:
@@ -121,15 +130,18 @@ def _save_plots(y_true, y_pred, fpr, tpr, roc_auc, prec, rec, pr_auc, out_dir: P
 
 def run_evaluation(
     architecture: str = DEFAULT_ARCHITECTURE,
+    tag: str | None = None,
+    test_split: str = "test",
     checkpoint_path: str | None = None,
     manifest_path: str | None = None,
     shards_dir: str | None = None,
     threshold: float | None = None,
     batch_size: int = 32,
 ) -> dict:
-    checkpoint_path = checkpoint_path or f"models/checkpoint_{architecture}.pt"
-    predictions_path = Path(f"data/predictions/test_predictions_{architecture}.csv")
-    metrics_dir = Path("metrics") / architecture
+    tag = tag or architecture
+    checkpoint_path = checkpoint_path or f"models/checkpoint_{tag}.pt"
+    predictions_path = Path(f"data/predictions/test_predictions_{tag}.csv")
+    metrics_dir = Path("metrics") / tag
 
     data_cfg = _load_yaml(DEFAULT_DATA_CONFIG)["data"]
     manifest_path = manifest_path or data_cfg["manifest_path"]
@@ -139,7 +151,11 @@ def run_evaluation(
         threshold = _load_yaml(DEFAULT_THRESHOLD_CONFIG)["thresholds"]["default"]
 
     manifest = pd.read_csv(manifest_path)
-    test_ds = ShardDataset(manifest, shards_dir=shards_dir, split="test")
+    if test_split == "seasonal":
+        test_df = manifest[manifest["season"].isin(COOL_SEASONS)]
+        test_ds = ShardDataset(test_df, shards_dir=shards_dir, split=None)
+    else:
+        test_ds = ShardDataset(manifest, shards_dir=shards_dir, split="test")
     if len(test_ds) == 0:
         raise RuntimeError(f"No test images found in {shards_dir} -- has ingest finished?")
     test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False, num_workers=0)
@@ -177,6 +193,11 @@ def run_evaluation(
     roc_auc = roc_auc_score(y_true, y_prob)
     pr_auc = average_precision_score(y_true, y_prob)
 
+    # Binary (mammal-class-only) metrics -- the headline numbers used elsewhere.
+    # Macro-average weights bird and mammal equally regardless of test-set size,
+    # which is the informative complement to the imbalance story. Micro-average
+    # is mathematically identical to accuracy in binary classification --
+    # reported for transparency (per supervisor request), not as new signal.
     metrics = {
         "threshold": threshold,
         "n_test_images": len(predictions),
@@ -184,6 +205,15 @@ def run_evaluation(
         "precision": precision_score(y_true, y_pred, zero_division=0),
         "recall": recall_score(y_true, y_pred, zero_division=0),
         "f1": f1_score(y_true, y_pred, zero_division=0),
+        "precision_macro": precision_score(y_true, y_pred, average="macro", zero_division=0),
+        "recall_macro": recall_score(y_true, y_pred, average="macro", zero_division=0),
+        "f1_macro": f1_score(y_true, y_pred, average="macro", zero_division=0),
+        "precision_micro": precision_score(y_true, y_pred, average="micro", zero_division=0),
+        "recall_micro": recall_score(y_true, y_pred, average="micro", zero_division=0),
+        "f1_micro": f1_score(y_true, y_pred, average="micro", zero_division=0),
+        "precision_per_class": precision_score(y_true, y_pred, average=None, zero_division=0).tolist(),
+        "recall_per_class": recall_score(y_true, y_pred, average=None, zero_division=0).tolist(),
+        "f1_per_class": f1_score(y_true, y_pred, average=None, zero_division=0).tolist(),
         "roc_auc": roc_auc,
         "pr_auc": pr_auc,
         "confusion_matrix": confusion_matrix(y_true, y_pred, labels=[0, 1]).tolist(),
@@ -195,11 +225,18 @@ def run_evaluation(
     pd.DataFrame({"precision": prec, "recall": rec}).to_csv(metrics_dir / "pr_curve.csv", index=False)
     _save_plots(y_true, y_pred, fpr, tpr, roc_auc, prec, rec, pr_auc, metrics_dir)
 
-    with mlflow.start_run(run_name=f"evaluate_{architecture}_test_set"):
+    with mlflow.start_run(run_name=f"evaluate_{tag}"):
         mlflow.log_param("architecture", architecture)
+        mlflow.log_param("test_split", test_split)
         mlflow.log_param("checkpoint_path", str(checkpoint_path))
         mlflow.log_param("threshold", threshold)
-        for key in ("accuracy", "precision", "recall", "f1", "roc_auc", "pr_auc"):
+        scalar_keys = (
+            "accuracy", "precision", "recall", "f1",
+            "precision_macro", "recall_macro", "f1_macro",
+            "precision_micro", "recall_micro", "f1_micro",
+            "roc_auc", "pr_auc",
+        )
+        for key in scalar_keys:
             mlflow.log_metric(key, metrics[key])
         mlflow.log_artifact(str(predictions_path))
         mlflow.log_artifact(str(metrics_dir / "eval.json"))
@@ -210,9 +247,21 @@ def run_evaluation(
         mlflow.log_artifact(str(metrics_dir / "pr_curve.png"))
 
     print(
-        f"[test, {architecture}] accuracy={metrics['accuracy']:.4f} precision={metrics['precision']:.4f} "
+        f"[{test_split}, {tag}] accuracy={metrics['accuracy']:.4f} precision={metrics['precision']:.4f} "
         f"recall={metrics['recall']:.4f} f1={metrics['f1']:.4f} "
         f"roc_auc={metrics['roc_auc']:.4f} pr_auc={metrics['pr_auc']:.4f}"
+    )
+    print(
+        f"  macro:  precision={metrics['precision_macro']:.4f} recall={metrics['recall_macro']:.4f} "
+        f"f1={metrics['f1_macro']:.4f}"
+    )
+    print(
+        f"  micro:  precision={metrics['precision_micro']:.4f} recall={metrics['recall_micro']:.4f} "
+        f"f1={metrics['f1_micro']:.4f}  (== accuracy in binary classification)"
+    )
+    print(
+        f"  per-class [bird, mammal]:  precision={metrics['precision_per_class']}  "
+        f"recall={metrics['recall_per_class']}  f1={metrics['f1_per_class']}"
     )
     print(f"confusion matrix (rows=true, cols=pred) [bird, mammal]:\n{metrics['confusion_matrix']}")
     print(f"wrote {predictions_path}, {metrics_dir}/eval.json, roc_curve.{{csv,png}}, pr_curve.{{csv,png}}, confusion_matrix.png")
@@ -224,7 +273,9 @@ def main() -> None:
     import sys
 
     architecture = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_ARCHITECTURE
-    run_evaluation(architecture=architecture)
+    test_split = sys.argv[2] if len(sys.argv) > 2 else "test"
+    tag = f"{architecture}_seasonal" if test_split == "seasonal" else architecture
+    run_evaluation(architecture=architecture, tag=tag, test_split=test_split)
 
 
 if __name__ == "__main__":
