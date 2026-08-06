@@ -11,39 +11,27 @@ Run:
 from __future__ import annotations
 
 import argparse
-import tarfile
 from pathlib import Path
 
 import pandas as pd
 
-from src.training.dataset import safe_member_name
+from src.training.dataset import ShardReader, safe_member_name
 
 
 def extract_images(image_ids: list[str], shards_dir: Path | str, out_dir: Path | str) -> list[str]:
-    shards_dir = Path(shards_dir)
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-
-    member_shard: dict[str, Path] = {}
-    for done_file in sorted(shards_dir.glob("shard-*.done")):
-        shard_path = done_file.with_suffix(".tar")
-        if shard_path.exists():
-            with tarfile.open(shard_path) as tar:
-                for name in tar.getnames():
-                    member_shard[name] = shard_path
+    reader = ShardReader(shards_dir)
 
     written: list[str] = []
     missing: list[str] = []
     for image_id in image_ids:
         member_name = safe_member_name(image_id)
-        shard_path = member_shard.get(member_name)
-        if shard_path is None:
+        if member_name not in reader:
             missing.append(image_id)
             continue
-        with tarfile.open(shard_path) as tar:
-            data = tar.extractfile(member_name).read()
         out_path = out_dir / member_name
-        out_path.write_bytes(data)
+        out_path.write_bytes(reader.read(member_name))
         written.append(str(out_path))
 
     if missing:
