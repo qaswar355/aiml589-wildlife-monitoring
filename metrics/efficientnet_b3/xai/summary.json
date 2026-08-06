@@ -1,0 +1,8 @@
+{
+  "tag": "efficientnet_b3",
+  "n_false_positives": 736,
+  "n_scored": 735,
+  "n_skipped_no_box": 1,
+  "pointing_game_mean": 0.13631814935717934,
+  "pointing_game_median": 0.03009207174181938
+}
