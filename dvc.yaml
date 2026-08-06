@@ -94,3 +94,72 @@ stages:
           cache: false
       - metrics/resnet50/pr_curve.csv:
           cache: false
+
+  train_efficientnet_b3_seasonal:
+    cmd: python -m src.training.seasonal_experiment configs/model/efficientnet_b3.yaml
+    deps:
+      - src/training/seasonal_experiment.py
+      - src/models/classifier.py
+      - data/manifest.csv
+      - data/shards/
+      - configs/training/default.yaml
+      - configs/model/efficientnet_b3.yaml
+    outs:
+      - models/checkpoint_efficientnet_b3_seasonal.pt
+
+  evaluate_efficientnet_b3_seasonal:
+    cmd: python -m src.training.evaluate efficientnet_b3 seasonal
+    deps:
+      - src/training/evaluate.py
+      - src/training/dataset.py
+      - src/models/classifier.py
+      - models/checkpoint_efficientnet_b3_seasonal.pt
+      - data/manifest.csv
+      - data/shards/
+      - configs/inference/threshold_config.yaml
+    outs:
+      - data/predictions/test_predictions_efficientnet_b3_seasonal.csv
+    metrics:
+      - metrics/efficientnet_b3_seasonal/eval.json:
+          cache: false
+    plots:
+      - metrics/efficientnet_b3_seasonal/roc_curve.csv:
+          cache: false
+      - metrics/efficientnet_b3_seasonal/pr_curve.csv:
+          cache: false
+
+  xai_efficientnet_b3:
+    cmd: python -m src.xai.gradcam efficientnet_b3 efficientnet_b3 test
+    deps:
+      - src/xai/gradcam.py
+      - src/models/classifier.py
+      - models/checkpoint_efficientnet_b3.pt
+      - data/predictions/test_predictions_efficientnet_b3.csv
+      - data/manifest.csv
+      - data/shards/
+    outs:
+      - metrics/efficientnet_b3/xai/
+
+  xai_resnet50:
+    cmd: python -m src.xai.gradcam resnet50 resnet50 test
+    deps:
+      - src/xai/gradcam.py
+      - src/models/classifier.py
+      - models/checkpoint_resnet50.pt
+      - data/predictions/test_predictions_resnet50.csv
+      - data/manifest.csv
+      - data/shards/
+    outs:
+      - metrics/resnet50/xai/
+
+  xai_efficientnet_b3_seasonal:
+    cmd: python -m src.xai.gradcam efficientnet_b3_seasonal efficientnet_b3 seasonal
+    deps:
+      - src/xai/gradcam.py
+      - src/models/classifier.py
+      - models/checkpoint_efficientnet_b3_seasonal.pt
+      - data/predictions/test_predictions_efficientnet_b3_seasonal.csv
+      - data/manifest.csv
+      - data/shards/
+    outs:
+      - metrics/efficientnet_b3_seasonal/xai/
