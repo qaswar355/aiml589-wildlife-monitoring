@@ -1,0 +1,20 @@
+{
+  "tag": "efficientnet_b3_seasonal",
+  "n_false_positives": 485,
+  "n_scored": 484,
+  "n_skipped_no_box": 1,
+  "pointing_game_mean": 0.3889293141956974,
+  "pointing_game_median": 0.33612629771232605,
+  "by_site_familiarity": {
+    "seen_site": {
+      "n_scored": 249,
+      "pointing_game_mean": 0.3568724987676369,
+      "pointing_game_median": 0.30252403020858765
+    },
+    "novel_site": {
+      "n_scored": 235,
+      "pointing_game_mean": 0.42289589735138694,
+      "pointing_game_median": 0.40002235770225525
+    }
+  }
+}
