@@ -128,6 +128,27 @@ def _save_plots(y_true, y_pred, fpr, tpr, roc_auc, prec, rec, pr_auc, out_dir: P
     plt.close(fig)
 
 
+def _site_familiarity_breakdown(predictions: pd.DataFrame, warm_sites: set[str]) -> dict:
+    """Seasonal-experiment-only diagnostic: does performance differ between
+    cool-season test images from sites also seen during warm-season training
+    versus sites never seen at all? Distinguishes "the model generalises
+    across seasons" from "the model has just seen this camera's background
+    before" -- see the seasonal generalisation discussion in the report."""
+    seen_mask = predictions["site_id"].isin(warm_sites)
+    breakdown = {}
+    for key, mask in (("seen_site", seen_mask), ("novel_site", ~seen_mask)):
+        sub = predictions[mask]
+        y_true, y_pred = sub["true_label"], sub["pred_label"]
+        breakdown[key] = {
+            "n": int(len(sub)),
+            "accuracy": accuracy_score(y_true, y_pred),
+            "precision": precision_score(y_true, y_pred, zero_division=0),
+            "recall": recall_score(y_true, y_pred, zero_division=0),
+            "f1": f1_score(y_true, y_pred, zero_division=0),
+        }
+    return breakdown
+
+
 def run_evaluation(
     architecture: str = DEFAULT_ARCHITECTURE,
     tag: str | None = None,
@@ -219,6 +240,10 @@ def run_evaluation(
         "confusion_matrix": confusion_matrix(y_true, y_pred, labels=[0, 1]).tolist(),
     }
 
+    if test_split == "seasonal":
+        warm_sites = set(manifest[manifest["season"].isin(("spring", "summer"))]["location"])
+        metrics["site_familiarity"] = _site_familiarity_breakdown(predictions, warm_sites)
+
     metrics_dir.mkdir(parents=True, exist_ok=True)
     (metrics_dir / "eval.json").write_text(json.dumps(metrics, indent=2))
     pd.DataFrame({"fpr": fpr, "tpr": tpr}).to_csv(metrics_dir / "roc_curve.csv", index=False)
@@ -238,6 +263,10 @@ def run_evaluation(
         )
         for key in scalar_keys:
             mlflow.log_metric(key, metrics[key])
+        if test_split == "seasonal":
+            for site_kind, site_metrics in metrics["site_familiarity"].items():
+                for metric_key in ("accuracy", "precision", "recall", "f1"):
+                    mlflow.log_metric(f"{site_kind}_{metric_key}", site_metrics[metric_key])
         mlflow.log_artifact(str(predictions_path))
         mlflow.log_artifact(str(metrics_dir / "eval.json"))
         mlflow.log_artifact(str(metrics_dir / "roc_curve.csv"))
@@ -264,6 +293,15 @@ def run_evaluation(
         f"recall={metrics['recall_per_class']}  f1={metrics['f1_per_class']}"
     )
     print(f"confusion matrix (rows=true, cols=pred) [bird, mammal]:\n{metrics['confusion_matrix']}")
+    if test_split == "seasonal":
+        fam = metrics["site_familiarity"]
+        print("  site familiarity breakdown (does the model rely on having seen this camera before?):")
+        for key in ("seen_site", "novel_site"):
+            m = fam[key]
+            print(
+                f"    {key}: n={m['n']}  accuracy={m['accuracy']:.4f} precision={m['precision']:.4f} "
+                f"recall={m['recall']:.4f} f1={m['f1']:.4f}"
+            )
     print(f"wrote {predictions_path}, {metrics_dir}/eval.json, roc_curve.{{csv,png}}, pr_curve.{{csv,png}}, confusion_matrix.png")
 
     return metrics
