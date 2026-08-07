@@ -1,0 +1,40 @@
+{
+  "tag": "efficientnet_b3",
+  "bird_correct": {
+    "n_scored": 8444,
+    "pointing_game_mean": 0.09973974923610579,
+    "pointing_game_median": 0.0
+  },
+  "mammal_correct": {
+    "n_scored": 5727,
+    "pointing_game_mean": 0.6670491956845594,
+    "pointing_game_median": 0.7331748008728027
+  },
+  "false_positive": {
+    "n_scored": 735,
+    "pointing_game_mean": 0.13631814935717934,
+    "pointing_game_median": 0.03009207174181938
+  },
+  "false_negative": {
+    "n_scored": 159,
+    "pointing_game_mean": 0.3919943283748745,
+    "pointing_game_median": 0.35184821486473083
+  },
+  "zero_attention_count_by_project": {
+    "DWT": 871,
+    "EFH": 776,
+    "TR1": 668,
+    "EFD": 635,
+    "AIV": 410,
+    "PS1": 387,
+    "RMP": 271,
+    "RMV": 242,
+    "RKU": 239,
+    "Z20": 233,
+    "ENA": 116,
+    "PS3": 87,
+    "ZIO": 63,
+    "PS2": 53,
+    "MLV": 46
+  }
+}

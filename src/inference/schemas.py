@@ -34,7 +34,7 @@ class PredictionResult(BaseModel):
     """Per-image prediction with uncertainty."""
     image_path: str
     label: int                  # 1 = mammal (invasive), 0 = bird (native)
-    confidence: float           # sigmoid output
+    confidence: float           # probability of whichever label was predicted, max(p, 1-p) -- see src/training/evaluate.py
     uncertainty: float          # MC Dropout epistemic uncertainty
     requires_review: bool       # True when confidence < threshold
     heatmap_path: str | None = None

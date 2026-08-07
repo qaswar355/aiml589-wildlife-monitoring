@@ -1,0 +1,16 @@
+# Which trained model the FastAPI inference service loads at startup, and
+# where it writes derived artifacts (heatmaps, the local prediction log).
+# Point this at a different checkpoint/architecture (e.g. the seasonal
+# experiment or the ResNet-50 baseline) to change what's served -- no code
+# change needed.
+serving:
+  tag: efficientnet_b3
+  architecture: efficientnet_b3
+  checkpoint_path: models/checkpoint_efficientnet_b3.pt
+  model_config_path: configs/model/efficientnet_b3.yaml   # sources dropout_rate + mc_dropout_passes
+
+  # Where /predict's optional Grad-CAM heatmaps and the local per-prediction
+  # log get written. Config-driven (rather than hardcoded in predict.py) so
+  # tests can point these at a tmp_path instead of the real repo tree.
+  heatmap_dir: data/predictions/heatmaps
+  prediction_log_path: data/predictions/serving_log.csv

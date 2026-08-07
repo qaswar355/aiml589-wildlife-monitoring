@@ -10,3 +10,12 @@ thresholds:
 
 # Minimum recall floor enforced by the model governance gate
 recall_floor: 0.90
+
+# MC Dropout uncertainty (std of sigmoid probability across N forward
+# passes) above which a prediction is flagged for human review, regardless
+# of which side of the decision threshold it landed on. Kept separate from
+# the decision thresholds above on purpose -- "is the label probably wrong"
+# and "is the model unsure" are different questions.
+# Placeholder — set after seeing the real distribution of MC Dropout std
+# on held-out data.
+uncertainty_review_cutoff: 0.15
