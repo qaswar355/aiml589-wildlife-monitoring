@@ -65,7 +65,7 @@ from sklearn.metrics import (
 )
 from torch.utils.data import DataLoader
 
-from src.models.classifier import WildlifeClassifier
+from src.models.classifier import load_checkpoint
 from src.training.dataset import ShardDataset
 
 DEFAULT_DATA_CONFIG = "configs/data/default.yaml"
@@ -158,6 +158,7 @@ def run_evaluation(
     shards_dir: str | None = None,
     threshold: float | None = None,
     batch_size: int = 32,
+    crop_to_box: bool = False,
 ) -> dict:
     tag = tag or architecture
     checkpoint_path = checkpoint_path or f"models/checkpoint_{tag}.pt"
@@ -167,6 +168,7 @@ def run_evaluation(
     data_cfg = _load_yaml(DEFAULT_DATA_CONFIG)["data"]
     manifest_path = manifest_path or data_cfg["manifest_path"]
     shards_dir = shards_dir or data_cfg["shards_dir"]
+    box_crop_padding = data_cfg.get("box_crop_padding", 0.15)
 
     if threshold is None:
         threshold = _load_yaml(DEFAULT_THRESHOLD_CONFIG)["thresholds"]["default"]
@@ -174,18 +176,19 @@ def run_evaluation(
     manifest = pd.read_csv(manifest_path)
     if test_split == "seasonal":
         test_df = manifest[manifest["season"].isin(COOL_SEASONS)]
-        test_ds = ShardDataset(test_df, shards_dir=shards_dir, split=None)
+        test_ds = ShardDataset(
+            test_df, shards_dir=shards_dir, split=None, crop_to_box=crop_to_box, box_crop_padding=box_crop_padding
+        )
     else:
-        test_ds = ShardDataset(manifest, shards_dir=shards_dir, split="test")
+        test_ds = ShardDataset(
+            manifest, shards_dir=shards_dir, split="test", crop_to_box=crop_to_box, box_crop_padding=box_crop_padding
+        )
     if len(test_ds) == 0:
         raise RuntimeError(f"No test images found in {shards_dir} -- has ingest finished?")
     test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False, num_workers=0)
 
     device = _resolve_torch_device()
-    model = WildlifeClassifier(architecture=architecture)
-    model.load_state_dict(torch.load(checkpoint_path, map_location=device, weights_only=True))
-    model.to(device)
-    model.eval()
+    model = load_checkpoint(checkpoint_path, architecture=architecture, device=device)
 
     probabilities: list[float] = []
     with torch.no_grad():
@@ -312,6 +315,15 @@ def main() -> None:
 
     architecture = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_ARCHITECTURE
     test_split = sys.argv[2] if len(sys.argv) > 2 else "test"
+
+    if test_split == "boxcrop":
+        # Box-crop experiment: same site-based test rows as the main
+        # baseline, just cropped to their MegaDetector box first, matching
+        # how the box-crop checkpoint was trained.
+        tag = f"{architecture}_boxcrop"
+        run_evaluation(architecture=architecture, tag=tag, test_split="test", crop_to_box=True)
+        return
+
     tag = f"{architecture}_seasonal" if test_split == "seasonal" else architecture
     run_evaluation(architecture=architecture, tag=tag, test_split=test_split)
 

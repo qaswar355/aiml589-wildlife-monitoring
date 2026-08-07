@@ -128,6 +128,43 @@ stages:
       - metrics/efficientnet_b3_seasonal/pr_curve.csv:
           cache: false
 
+  train_efficientnet_b3_boxcrop:
+    cmd: python -m src.training.boxcrop_experiment configs/model/efficientnet_b3.yaml
+    deps:
+      - src/training/boxcrop_experiment.py
+      - src/training/train.py
+      - src/training/dataset.py
+      - src/models/classifier.py
+      - data/manifest.csv
+      - data/shards/
+      - configs/data/default.yaml
+      - configs/training/default.yaml
+      - configs/model/efficientnet_b3.yaml
+    outs:
+      - models/checkpoint_efficientnet_b3_boxcrop.pt
+
+  evaluate_efficientnet_b3_boxcrop:
+    cmd: python -m src.training.evaluate efficientnet_b3 boxcrop
+    deps:
+      - src/training/evaluate.py
+      - src/training/dataset.py
+      - src/models/classifier.py
+      - models/checkpoint_efficientnet_b3_boxcrop.pt
+      - data/manifest.csv
+      - data/shards/
+      - configs/data/default.yaml
+      - configs/inference/threshold_config.yaml
+    outs:
+      - data/predictions/test_predictions_efficientnet_b3_boxcrop.csv
+    metrics:
+      - metrics/efficientnet_b3_boxcrop/eval.json:
+          cache: false
+    plots:
+      - metrics/efficientnet_b3_boxcrop/roc_curve.csv:
+          cache: false
+      - metrics/efficientnet_b3_boxcrop/pr_curve.csv:
+          cache: false
+
   xai_efficientnet_b3:
     cmd: python -m src.xai.gradcam efficientnet_b3 efficientnet_b3 test
     deps:

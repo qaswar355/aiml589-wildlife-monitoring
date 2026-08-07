@@ -128,10 +128,21 @@ class WildlifeLightningModule(pl.LightningModule):
         return {"optimizer": optimizer, "lr_scheduler": scheduler}
 
 
-def build_dataloaders(manifest_path: str, shards_dir: str, batch_size: int, num_workers: int = 0):
+def build_dataloaders(
+    manifest_path: str,
+    shards_dir: str,
+    batch_size: int,
+    num_workers: int = 0,
+    crop_to_box: bool = False,
+    box_crop_padding: float = 0.15,
+):
     manifest = pd.read_csv(manifest_path)
-    train_ds = ShardDataset(manifest, shards_dir=shards_dir, split="train")
-    val_ds = ShardDataset(manifest, shards_dir=shards_dir, split="val")
+    train_ds = ShardDataset(
+        manifest, shards_dir=shards_dir, split="train", crop_to_box=crop_to_box, box_crop_padding=box_crop_padding
+    )
+    val_ds = ShardDataset(
+        manifest, shards_dir=shards_dir, split="val", crop_to_box=crop_to_box, box_crop_padding=box_crop_padding
+    )
 
     train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=num_workers)
     val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=num_workers)

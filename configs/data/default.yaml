@@ -26,6 +26,13 @@ data:
   burst_window_seconds: 60
   md_conf_threshold: 0.2
 
+  # Margin added around each MegaDetector box before resizing, as a
+  # fraction of the box's own width/height -- see
+  # src.training.dataset.crop_to_bbox. Only used when a dataset is built
+  # with crop_to_box=True (the box-crop experiment); the main baseline and
+  # seasonal experiment don't read this.
+  box_crop_padding: 0.15
+
   split:
     test_size: 0.2
     val_size: 0.1
