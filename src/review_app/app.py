@@ -10,6 +10,7 @@ To run in Docker: see docker-compose.yml (app service)
 """
 import streamlit as st
 
+from src.review_app.live_demo_view import render_live_demo_view
 from src.review_app.practitioner_view import render_practitioner_view
 from src.review_app.researcher_view import render_researcher_view
 
@@ -20,9 +21,11 @@ st.set_page_config(
 )
 
 st.sidebar.title("Wildlife Monitoring")
-view = st.sidebar.radio("Select view", ["Practitioner", "Researcher / Supervisor"])
+view = st.sidebar.radio("Select view", ["Practitioner", "Researcher / Supervisor", "Live Demo"])
 
 if view == "Practitioner":
     render_practitioner_view()
-else:
+elif view == "Researcher / Supervisor":
     render_researcher_view()
+else:
+    render_live_demo_view()

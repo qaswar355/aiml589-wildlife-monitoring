@@ -75,7 +75,15 @@ class WildlifeClassifier(nn.Module):
         self, x: torch.Tensor, mc_dropout_passes: int = 1
     ) -> tuple[torch.Tensor, torch.Tensor]:
         was_training = self.training
-        self.train(mc_dropout_passes > 1)  # keep dropout active only for MC passes
+        self.eval()  # the backbone's BatchNorm layers must stay in eval mode
+        # no matter what: training mode would make them compute statistics
+        # from this one input instead of using their learned running
+        # averages, AND permanently drift those running averages with
+        # every single call. Only Dropout should switch on for MC passes.
+        if mc_dropout_passes > 1:
+            for module in self.modules():
+                if isinstance(module, nn.Dropout):
+                    module.train()
 
         with torch.no_grad():
             passes = torch.stack(
@@ -84,3 +92,33 @@ class WildlifeClassifier(nn.Module):
 
         self.train(was_training)
         return passes.mean(dim=0), passes.std(dim=0)
+
+
+def load_checkpoint(
+    checkpoint_path: str,
+    architecture: str = "efficientnet_b3",
+    device: torch.device | None = None,
+    dropout_rate: float = 0.3,
+    pretrained: bool = False,
+) -> WildlifeClassifier:
+    """Build a WildlifeClassifier and load a trained checkpoint onto it, in
+    eval mode, on `device`. Shared by evaluate.py, gradcam.py, and the
+    inference API so this doesn't get reimplemented a third time.
+
+    `dropout_rate` has to be passed in explicitly and match what the
+    checkpoint was trained with: nn.Dropout has no learned weights, so
+    load_state_dict can't restore it. Get this wrong and MC Dropout
+    uncertainty is silently computed at the wrong dropout probability even
+    though the point predictions still look fine.
+
+    `pretrained=False` by default -- load_state_dict overwrites every
+    backbone weight anyway, so starting from ImageNet weights vs. random
+    ones makes no difference to the result, and skipping it avoids an
+    unnecessary download.
+    """
+    device = device or torch.device("cpu")
+    model = WildlifeClassifier(architecture=architecture, pretrained=pretrained, dropout_rate=dropout_rate)
+    model.load_state_dict(torch.load(checkpoint_path, map_location=device, weights_only=True))
+    model.to(device)
+    model.eval()
+    return model

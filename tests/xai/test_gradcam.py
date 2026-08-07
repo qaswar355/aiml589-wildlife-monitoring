@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from src.xai.gradcam import _load_false_positives, _seen_site_mask, pointing_game_score
+from src.xai.gradcam import OUTCOME_DEFINITIONS, _load_false_positives, _seen_site_mask, pointing_game_score
 
 
 def test_pointing_game_score_all_attention_inside_box():
@@ -72,3 +72,44 @@ def test_seen_site_mask_matches_warm_season_locations():
     )
     mask = _seen_site_mask(false_positives, manifest)
     assert mask.tolist() == [True, False, False]
+
+
+def _sample_outcomes_df():
+    # a: bird correctly classified, b: mammal correctly classified,
+    # c: bird misclassified as mammal, d: mammal misclassified as bird
+    return pd.DataFrame(
+        {
+            "image_id": ["a", "b", "c", "d"],
+            "true_label": [0, 1, 0, 1],
+            "pred_label": [0, 1, 1, 0],
+        }
+    )
+
+
+def test_outcome_definitions_bird_correct():
+    df = _sample_outcomes_df()
+    assert df[OUTCOME_DEFINITIONS["bird_correct"](df)]["image_id"].tolist() == ["a"]
+
+
+def test_outcome_definitions_mammal_correct():
+    df = _sample_outcomes_df()
+    assert df[OUTCOME_DEFINITIONS["mammal_correct"](df)]["image_id"].tolist() == ["b"]
+
+
+def test_outcome_definitions_false_positive_is_bird_called_mammal():
+    df = _sample_outcomes_df()
+    assert df[OUTCOME_DEFINITIONS["false_positive"](df)]["image_id"].tolist() == ["c"]
+
+
+def test_outcome_definitions_false_negative_is_mammal_called_bird():
+    df = _sample_outcomes_df()
+    assert df[OUTCOME_DEFINITIONS["false_negative"](df)]["image_id"].tolist() == ["d"]
+
+
+def test_outcome_definitions_partition_the_whole_dataframe():
+    """Every row belongs to exactly one outcome -- the four masks should
+    never overlap and should never miss a row."""
+    df = _sample_outcomes_df()
+    masks = [mask_fn(df) for mask_fn in OUTCOME_DEFINITIONS.values()]
+    coverage = sum(m.astype(int) for m in masks)
+    assert coverage.tolist() == [1, 1, 1, 1]

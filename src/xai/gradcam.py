@@ -23,8 +23,18 @@ Note: MegaDetector's boxes are model predictions, not human annotations
 so the pointing-game score is measured against a pseudo-ground-truth,
 not verified ground truth. Worth saying so in the report.
 
+Also here: run_attention_audit(), a broader check triggered by a manual
+live-demo test that found a correctly-classified kiwi whose heatmap
+showed zero attention on the bird at all. run_gradcam_analysis() only
+ever looked at false positives, so it couldn't say whether that was a
+one-off or how this model generally solves the task, right answers
+included. The audit scores the pointing game across all four prediction
+outcomes (bird correctly classified, mammal correctly classified, and
+both error directions), over the whole test set rather than a sample.
+
 Run: python -m src.xai.gradcam <tag> [architecture] [test_split]
      e.g. python -m src.xai.gradcam efficientnet_b3_seasonal efficientnet_b3 seasonal
+     python -m src.xai.gradcam <tag> --audit [architecture]
 """
 from __future__ import annotations
 
@@ -39,13 +49,12 @@ import matplotlib.pyplot as plt
 import mlflow
 import numpy as np
 import pandas as pd
-import torch
 from PIL import Image
 from pytorch_grad_cam import GradCAMPlusPlus
 from pytorch_grad_cam.utils.image import show_cam_on_image
 from pytorch_grad_cam.utils.model_targets import BinaryClassifierOutputTarget
 
-from src.models.classifier import WildlifeClassifier
+from src.models.classifier import load_checkpoint
 from src.training.dataset import DEFAULT_TRANSFORM, ShardReader, safe_member_name
 from src.training.evaluate import DEFAULT_DATA_CONFIG, _load_yaml, _resolve_torch_device
 
@@ -56,10 +65,43 @@ N_EXAMPLE_HEATMAPS = 16
 # Grad-CAM needs a specific convolutional layer to read gradients from --
 # by convention, the last one before the classifier head, since that's
 # where spatial detail and learned features are both still present.
-_TARGET_LAYER_BY_ARCHITECTURE = {
+# Public (no leading underscore) because src.inference.predict reuses this
+# same architecture -> layer mapping rather than keeping a second copy.
+TARGET_LAYER_BY_ARCHITECTURE = {
     "efficientnet_b3": lambda model: model.backbone.features[-1],
     "resnet50": lambda model: model.backbone.layer4[-1],
 }
+
+
+def compute_and_save_heatmap(
+    cam_builder: GradCAMPlusPlus,
+    image: Image.Image,
+    out_path: Path,
+    title: str,
+) -> Path:
+    """Runs Grad-CAM++ over `image` and saves the image+heatmap overlay to
+    `out_path`. Shared by the batch false-positive analysis below and by
+    live single-image inference, so there's one implementation instead of
+    two that could drift apart.
+
+    Takes `cam_builder` rather than a separate device argument -- it
+    already knows the model's device (pytorch_grad_cam's BaseCAM sets
+    `.device` from the wrapped model's own parameters).
+    """
+    input_tensor = DEFAULT_TRANSFORM(image).unsqueeze(0).to(cam_builder.device)
+    grayscale_cam = cam_builder(input_tensor=input_tensor, targets=[BinaryClassifierOutputTarget(1)])[0]
+
+    display_image = np.asarray(image.resize((300, 300)), dtype=np.float32) / 255.0
+    overlay = show_cam_on_image(display_image, grayscale_cam, use_rgb=True)
+
+    fig, ax = plt.subplots(figsize=(4, 4))
+    ax.imshow(overlay)
+    ax.set_title(title, fontsize=9)
+    ax.axis("off")
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=120)
+    plt.close(fig)
+    return out_path
 
 
 def pointing_game_score(cam: np.ndarray, bbox: list[float]) -> float:
@@ -107,6 +149,19 @@ def _seen_site_mask(false_positives: pd.DataFrame, manifest: pd.DataFrame) -> pd
     return false_positives["site_id"].isin(warm_sites)
 
 
+# The four cells of the confusion matrix, named by what actually happened
+# rather than by TP/FP/TN/FN -- easier to keep straight when reading the
+# audit's output. Used by run_attention_audit() to check whether the
+# background-reliance seen in false positives also shows up when the
+# model gets the answer right.
+OUTCOME_DEFINITIONS = {
+    "bird_correct": lambda df: (df["true_label"] == 0) & (df["pred_label"] == 0),
+    "mammal_correct": lambda df: (df["true_label"] == 1) & (df["pred_label"] == 1),
+    "false_positive": lambda df: (df["true_label"] == 0) & (df["pred_label"] == 1),  # bird -> mammal
+    "false_negative": lambda df: (df["true_label"] == 1) & (df["pred_label"] == 0),  # mammal -> bird
+}
+
+
 def run_gradcam_analysis(
     tag: str,
     architecture: str = DEFAULT_ARCHITECTURE,
@@ -135,12 +190,9 @@ def run_gradcam_analysis(
         false_positives["seen_site"] = _seen_site_mask(false_positives, manifest)
 
     device = _resolve_torch_device()
-    model = WildlifeClassifier(architecture=architecture)
-    model.load_state_dict(torch.load(checkpoint_path, map_location=device, weights_only=True))
-    model.to(device)
-    model.eval()
+    model = load_checkpoint(checkpoint_path, architecture=architecture, device=device)
 
-    target_layer = _TARGET_LAYER_BY_ARCHITECTURE[architecture](model)
+    target_layer = TARGET_LAYER_BY_ARCHITECTURE[architecture](model)
     cam_builder = GradCAMPlusPlus(model=model, target_layers=[target_layer])
     reader = ShardReader(shards_dir)
 
@@ -171,15 +223,8 @@ def run_gradcam_analysis(
         scores.append(record)
 
         if saved_examples < n_examples:
-            display_image = np.asarray(image.resize((300, 300)), dtype=np.float32) / 255.0
-            overlay = show_cam_on_image(display_image, grayscale_cam, use_rgb=True)
-            fig, ax = plt.subplots(figsize=(4, 4))
-            ax.imshow(overlay)
-            ax.set_title(f"{row['species']} -> mammal (conf={row['confidence']:.2f})", fontsize=9)
-            ax.axis("off")
-            fig.tight_layout()
-            fig.savefig(heatmap_dir / f"{member_name}", dpi=120)
-            plt.close(fig)
+            title = f"{row['species']} -> mammal (conf={row['confidence']:.2f})"
+            compute_and_save_heatmap(cam_builder, image, heatmap_dir / member_name, title)
             saved_examples += 1
 
     scores_df = pd.DataFrame(scores)
@@ -232,12 +277,127 @@ def run_gradcam_analysis(
     return summary
 
 
+def run_attention_audit(
+    tag: str,
+    architecture: str = DEFAULT_ARCHITECTURE,
+    checkpoint_path: str | None = None,
+    manifest_path: str | None = None,
+    shards_dir: str | None = None,
+    predictions_path: str | None = None,
+    n_examples_per_outcome: int = 8,
+) -> dict:
+    """Pointing-game score across the whole test set, broken down by
+    outcome (see OUTCOME_DEFINITIONS) rather than false positives alone.
+
+    Scores every test image with a box, but only re-renders and saves a
+    heatmap for the worst-scoring `n_examples_per_outcome` per outcome --
+    those are the interesting ones: for the *_correct outcomes, a low
+    score means the model got the right answer while looking at the wrong
+    thing entirely.
+    """
+    checkpoint_path = checkpoint_path or f"models/checkpoint_{tag}.pt"
+    out_dir = Path("metrics") / tag / "xai" / "attention_audit"
+    heatmap_dir = out_dir / "heatmaps"
+    heatmap_dir.mkdir(parents=True, exist_ok=True)
+
+    data_cfg = _load_yaml(DEFAULT_DATA_CONFIG)["data"]
+    manifest_path = manifest_path or data_cfg["manifest_path"]
+    shards_dir = shards_dir or data_cfg["shards_dir"]
+
+    manifest = pd.read_csv(manifest_path)
+    predictions_path = predictions_path or f"data/predictions/test_predictions_{tag}.csv"
+    predictions = pd.read_csv(predictions_path)
+
+    boxes = manifest[["image_id", "bbox", "project", "location"]]
+    joined = predictions.merge(boxes, on="image_id", how="left")
+    joined["bbox"] = joined["bbox"].apply(lambda b: json.loads(b) if isinstance(b, str) and b else None)
+    joined = joined[joined["bbox"].notna()]
+
+    device = _resolve_torch_device()
+    model = load_checkpoint(checkpoint_path, architecture=architecture, device=device)
+    target_layer = TARGET_LAYER_BY_ARCHITECTURE[architecture](model)
+    cam_builder = GradCAMPlusPlus(model=model, target_layers=[target_layer])
+    reader = ShardReader(shards_dir)
+
+    def score_row(row) -> float | None:
+        member_name = safe_member_name(row["image_id"])
+        if member_name not in reader:
+            return None
+        image = Image.open(io.BytesIO(reader.read(member_name))).convert("RGB")
+        input_tensor = DEFAULT_TRANSFORM(image).unsqueeze(0).to(device)
+        grayscale_cam = cam_builder(input_tensor=input_tensor, targets=[BinaryClassifierOutputTarget(1)])[0]
+        return pointing_game_score(grayscale_cam, row["bbox"])
+
+    all_scored = []
+    summary: dict = {"tag": tag}
+    for outcome, mask_fn in OUTCOME_DEFINITIONS.items():
+        subset = joined[mask_fn(joined)].copy()
+        subset["pointing_game_score"] = [score_row(row) for _, row in subset.iterrows()]
+        subset = subset.dropna(subset=["pointing_game_score"])
+        subset["outcome"] = outcome
+        all_scored.append(subset[["image_id", "species", "project", "location", "confidence", "outcome", "pointing_game_score"]])
+
+        summary[outcome] = {
+            "n_scored": len(subset),
+            "pointing_game_mean": float(subset["pointing_game_score"].mean()) if len(subset) else None,
+            "pointing_game_median": float(subset["pointing_game_score"].median()) if len(subset) else None,
+        }
+        print(
+            f"{outcome}: n={summary[outcome]['n_scored']}  "
+            f"mean={summary[outcome]['pointing_game_mean']:.4f}  median={summary[outcome]['pointing_game_median']:.4f}"
+        )
+
+        worst = subset.sort_values("pointing_game_score").head(n_examples_per_outcome)
+        for _, row in worst.iterrows():
+            member_name = safe_member_name(row["image_id"])
+            image = Image.open(io.BytesIO(reader.read(member_name))).convert("RGB")
+            title = f"{row['species']} ({outcome}, score={row['pointing_game_score']:.2f})"
+            compute_and_save_heatmap(cam_builder, image, heatmap_dir / f"{outcome}__{member_name}", title)
+
+    scores_df = pd.concat(all_scored, ignore_index=True)
+    scores_df.to_csv(out_dir / "attention_audit_scores.csv", index=False)
+
+    # Does the zero-attention pattern cluster by project/site? A concrete
+    # check for whether a recurring background object (like the white
+    # card found behind one myna during manual testing) is a site-level
+    # dataset artifact rather than a one-off.
+    zero_attention = scores_df[scores_df["pointing_game_score"] == 0.0]
+    by_project = zero_attention["project"].value_counts()
+    summary["zero_attention_count_by_project"] = by_project.head(15).to_dict()
+
+    (out_dir / "summary.json").write_text(json.dumps(summary, indent=2))
+
+    with mlflow.start_run(run_name=f"attention_audit_{tag}"):
+        mlflow.log_param("architecture", architecture)
+        mlflow.log_param("checkpoint_path", str(checkpoint_path))
+        for outcome in OUTCOME_DEFINITIONS:
+            if summary[outcome]["pointing_game_mean"] is not None:
+                mlflow.log_metric(f"{outcome}_pointing_game_mean", summary[outcome]["pointing_game_mean"])
+                mlflow.log_metric(f"{outcome}_pointing_game_median", summary[outcome]["pointing_game_median"])
+        mlflow.log_artifact(str(out_dir / "summary.json"))
+        mlflow.log_artifact(str(out_dir / "attention_audit_scores.csv"))
+
+    print(f"wrote {out_dir}/summary.json, attention_audit_scores.csv, and heatmaps to {heatmap_dir}")
+    print("zero-attention count by project (top 15):")
+    print(by_project.head(15))
+
+    return summary
+
+
 def main() -> None:
     import sys
 
     if len(sys.argv) < 2:
-        raise SystemExit("usage: python -m src.xai.gradcam <tag> [architecture] [test_split]")
+        raise SystemExit(
+            "usage: python -m src.xai.gradcam <tag> [architecture] [test_split]\n"
+            "       python -m src.xai.gradcam <tag> --audit [architecture]"
+        )
     tag = sys.argv[1]
+    if len(sys.argv) > 2 and sys.argv[2] == "--audit":
+        architecture = sys.argv[3] if len(sys.argv) > 3 else DEFAULT_ARCHITECTURE
+        run_attention_audit(tag=tag, architecture=architecture)
+        return
+
     architecture = sys.argv[2] if len(sys.argv) > 2 else DEFAULT_ARCHITECTURE
     test_split = sys.argv[3] if len(sys.argv) > 3 else "test"
     run_gradcam_analysis(tag=tag, architecture=architecture, test_split=test_split)
