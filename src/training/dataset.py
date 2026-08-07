@@ -11,6 +11,7 @@ more as ingest continues.
 from __future__ import annotations
 
 import io
+import json
 import tarfile
 from pathlib import Path
 
@@ -32,6 +33,44 @@ DEFAULT_TRANSFORM = transforms.Compose(
 def safe_member_name(image_id: str) -> str:
     """Must match src/data/ingest.py's _safe_member_name exactly."""
     return image_id.replace("/", "__").rsplit(".", 1)[0] + ".jpg"
+
+
+def crop_to_bbox(image: Image.Image, row, padding: float = 0.15) -> Image.Image:
+    """Crops `image` to its MegaDetector box (row['bbox'], a JSON
+    [x, y, w, h] string normalised 0-1), expanded by `padding` as a
+    fraction of the box's own width/height on each side, clamped to the
+    image bounds.
+
+    Falls back to the full, uncropped image whenever there's no
+    trustworthy box: `has_box` is False (a low/negative-confidence
+    detection -- see build_manifest.py, ~0.5% of the manifest), the bbox
+    is missing/malformed, or the box has zero area. Every manifest row
+    actually carries *some* bbox string, but has_box is the real "is this
+    detection worth trusting" flag, so that's what gates the crop, not
+    just "is bbox non-empty".
+    """
+    if not row.get("has_box", False):
+        return image
+    bbox_json = row.get("bbox")
+    if not isinstance(bbox_json, str) or not bbox_json:
+        return image
+    try:
+        x, y, w, h = json.loads(bbox_json)
+    except (ValueError, TypeError):
+        return image
+    if w <= 0 or h <= 0:
+        return image
+
+    img_w, img_h = image.size
+    pad_x, pad_y = w * padding, h * padding
+    x0, y0 = max(0.0, x - pad_x), max(0.0, y - pad_y)
+    x1, y1 = min(1.0, x + w + pad_x), min(1.0, y + h + pad_y)
+
+    left, top = int(x0 * img_w), int(y0 * img_h)
+    right, bottom = int(x1 * img_w), int(y1 * img_h)
+    if right <= left or bottom <= top:
+        return image
+    return image.crop((left, top, right, bottom))
 
 
 def index_shards(shards_dir: Path | str) -> tuple[dict[str, tarfile.TarInfo], dict[str, Path]]:
@@ -84,8 +123,12 @@ class ShardDataset(Dataset):
         shards_dir: Path | str = "data/shards",
         split: str | None = None,
         transform=DEFAULT_TRANSFORM,
+        crop_to_box: bool = False,
+        box_crop_padding: float = 0.15,
     ) -> None:
         self.transform = transform
+        self.crop_to_box = crop_to_box
+        self.box_crop_padding = box_crop_padding
         self.reader = ShardReader(shards_dir)
 
         df = manifest if split is None else manifest[manifest["split"] == split]
@@ -100,6 +143,8 @@ class ShardDataset(Dataset):
         row = self._rows.iloc[idx]
         data = self.reader.read(row["_member_name"])
         img = Image.open(io.BytesIO(data)).convert("RGB")
+        if self.crop_to_box:
+            img = crop_to_bbox(img, row, padding=self.box_crop_padding)
         if self.transform:
             img = self.transform(img)
         label = torch.tensor(float(row["label"]))
