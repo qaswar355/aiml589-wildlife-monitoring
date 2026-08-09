@@ -35,6 +35,26 @@ def safe_member_name(image_id: str) -> str:
     return image_id.replace("/", "__").rsplit(".", 1)[0] + ".jpg"
 
 
+def crop_bounds_from_bbox(
+    bbox: list[float] | tuple[float, float, float, float], padding: float = 0.15
+) -> tuple[float, float, float, float] | None:
+    """Normalised 0-1 (x0, y0, x1, y1) crop bounds for a MegaDetector box
+    [x, y, w, h] (normalised 0-1), expanded by `padding` as a fraction of
+    the box's own width/height on each side, clamped to [0, 1]. None if
+    the box has no area. Split out from crop_to_bbox so the XAI tooling
+    can crop an image for the model exactly like training did, while
+    still knowing where that crop landed in the original frame."""
+    x, y, w, h = bbox
+    if w <= 0 or h <= 0:
+        return None
+    pad_x, pad_y = w * padding, h * padding
+    x0, y0 = max(0.0, x - pad_x), max(0.0, y - pad_y)
+    x1, y1 = min(1.0, x + w + pad_x), min(1.0, y + h + pad_y)
+    if x1 <= x0 or y1 <= y0:
+        return None
+    return x0, y0, x1, y1
+
+
 def crop_to_bbox(image: Image.Image, row, padding: float = 0.15) -> Image.Image:
     """Crops `image` to its MegaDetector box (row['bbox'], a JSON
     [x, y, w, h] string normalised 0-1), expanded by `padding` as a
@@ -55,17 +75,15 @@ def crop_to_bbox(image: Image.Image, row, padding: float = 0.15) -> Image.Image:
     if not isinstance(bbox_json, str) or not bbox_json:
         return image
     try:
-        x, y, w, h = json.loads(bbox_json)
+        bbox = json.loads(bbox_json)
     except (ValueError, TypeError):
         return image
-    if w <= 0 or h <= 0:
+    bounds = crop_bounds_from_bbox(bbox, padding)
+    if bounds is None:
         return image
 
     img_w, img_h = image.size
-    pad_x, pad_y = w * padding, h * padding
-    x0, y0 = max(0.0, x - pad_x), max(0.0, y - pad_y)
-    x1, y1 = min(1.0, x + w + pad_x), min(1.0, y + h + pad_y)
-
+    x0, y0, x1, y1 = bounds
     left, top = int(x0 * img_w), int(y0 * img_h)
     right, bottom = int(x1 * img_w), int(y1 * img_h)
     if right <= left or bottom <= top:
