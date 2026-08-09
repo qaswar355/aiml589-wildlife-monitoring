@@ -35,9 +35,11 @@ checkpoint at the default threshold.
 
 Run: python -m src.training.evaluate [architecture] [test_split]
      (architecture defaults to efficientnet_b3; test_split defaults to
-     "test" -- the site-based split -- pass "seasonal" to evaluate
-     against the autumn/winter set instead, matching a checkpoint
-     produced by seasonal_experiment.py)
+     "test" -- the site-based split. Pass "seasonal" to evaluate against
+     the autumn/winter set instead, matching a checkpoint produced by
+     seasonal_experiment.py; "boxcrop" for a checkpoint produced by
+     boxcrop_experiment.py; "seasonal_boxcrop" for a checkpoint produced
+     by seasonal_experiment.py --crop-to-box)
 """
 from __future__ import annotations
 
@@ -322,6 +324,15 @@ def main() -> None:
         # how the box-crop checkpoint was trained.
         tag = f"{architecture}_boxcrop"
         run_evaluation(architecture=architecture, tag=tag, test_split="test", crop_to_box=True)
+        return
+
+    if test_split == "seasonal_boxcrop":
+        # Seasonal generalisation, box-crop variant: same cool-season test
+        # rows as the plain seasonal experiment, cropped to their
+        # MegaDetector box first, matching how the seasonal_boxcrop
+        # checkpoint was trained.
+        tag = f"{architecture}_seasonal_boxcrop"
+        run_evaluation(architecture=architecture, tag=tag, test_split="seasonal", crop_to_box=True)
         return
 
     tag = f"{architecture}_seasonal" if test_split == "seasonal" else architecture
