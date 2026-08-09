@@ -55,7 +55,7 @@ from pytorch_grad_cam.utils.image import show_cam_on_image
 from pytorch_grad_cam.utils.model_targets import BinaryClassifierOutputTarget
 
 from src.models.classifier import load_checkpoint
-from src.training.dataset import DEFAULT_TRANSFORM, ShardReader, safe_member_name
+from src.training.dataset import DEFAULT_TRANSFORM, ShardReader, crop_bounds_from_bbox, safe_member_name
 from src.training.evaluate import DEFAULT_DATA_CONFIG, _load_yaml, _resolve_torch_device
 
 DEFAULT_ARCHITECTURE = "efficientnet_b3"
@@ -122,6 +122,75 @@ def pointing_game_score(cam: np.ndarray, bbox: list[float]) -> float:
     if total <= 0 or x1 <= x0 or y1 <= y0:
         return 0.0
     return float(cam[y0:y1, x0:x1].sum() / total)
+
+
+def compute_boxcrop_cam(
+    cam_builder: GradCAMPlusPlus,
+    image: Image.Image,
+    bbox: list[float],
+    padding: float,
+    canvas_size: int = 300,
+) -> np.ndarray:
+    """Runs Grad-CAM++ on `image` cropped to its MegaDetector box the same
+    way training did (crop_bounds_from_bbox), then places the resulting
+    heatmap back at its true location on a canvas_size x canvas_size
+    canvas representing the *original, uncropped* frame -- zero
+    everywhere outside the crop, since a box-crop-trained model never saw
+    anything outside it.
+
+    This matters for comparing against a model evaluated on full frames:
+    scoring the pointing game directly on the crop would inflate the
+    score mechanically (the box now covers most of a much smaller frame)
+    regardless of whether the model actually learned to attend to the
+    animal. Keeping the canvas the size of the original frame keeps the
+    box the same true fraction of the scoring area either way, so the two
+    models' pointing-game scores stay comparable.
+    """
+    canvas = np.zeros((canvas_size, canvas_size), dtype=np.float32)
+    bounds = crop_bounds_from_bbox(bbox, padding)
+    if bounds is None:
+        input_tensor = DEFAULT_TRANSFORM(image).unsqueeze(0).to(cam_builder.device)
+        return cam_builder(input_tensor=input_tensor, targets=[BinaryClassifierOutputTarget(1)])[0]
+
+    x0, y0, x1, y1 = bounds
+    img_w, img_h = image.size
+    left, top = int(x0 * img_w), int(y0 * img_h)
+    right, bottom = int(x1 * img_w), int(y1 * img_h)
+    cropped = image.crop((left, top, right, bottom))
+
+    input_tensor = DEFAULT_TRANSFORM(cropped).unsqueeze(0).to(cam_builder.device)
+    crop_cam = cam_builder(input_tensor=input_tensor, targets=[BinaryClassifierOutputTarget(1)])[0]
+
+    cx0, cy0 = int(x0 * canvas_size), int(y0 * canvas_size)
+    cx1, cy1 = int(x1 * canvas_size), int(y1 * canvas_size)
+    cx1, cy1 = max(cx1, cx0 + 1), max(cy1, cy0 + 1)
+    resized = np.array(Image.fromarray(crop_cam, mode="F").resize((cx1 - cx0, cy1 - cy0), Image.BILINEAR))
+    canvas[cy0:cy1, cx0:cx1] = resized
+    return canvas
+
+
+def compute_and_save_boxcrop_heatmap(
+    cam_builder: GradCAMPlusPlus,
+    image: Image.Image,
+    bbox: list[float],
+    padding: float,
+    out_path: Path,
+    title: str,
+) -> Path:
+    """Saves a heatmap overlay on the crop the box-crop model actually saw
+    (rather than the full frame, which would mostly show black padding
+    from compute_boxcrop_cam's zeroed canvas) -- falls back to
+    compute_and_save_heatmap on the full frame when there's no
+    trustworthy box, matching training's own fallback."""
+    bounds = crop_bounds_from_bbox(bbox, padding)
+    if bounds is None:
+        return compute_and_save_heatmap(cam_builder, image, out_path, title)
+    x0, y0, x1, y1 = bounds
+    img_w, img_h = image.size
+    left, top = int(x0 * img_w), int(y0 * img_h)
+    right, bottom = int(x1 * img_w), int(y1 * img_h)
+    cropped = image.crop((left, top, right, bottom))
+    return compute_and_save_heatmap(cam_builder, cropped, out_path, title)
 
 
 def _load_false_positives(
@@ -285,6 +354,8 @@ def run_attention_audit(
     shards_dir: str | None = None,
     predictions_path: str | None = None,
     n_examples_per_outcome: int = 8,
+    crop_to_box: bool = False,
+    box_crop_padding: float | None = None,
 ) -> dict:
     """Pointing-game score across the whole test set, broken down by
     outcome (see OUTCOME_DEFINITIONS) rather than false positives alone.
@@ -294,6 +365,18 @@ def run_attention_audit(
     those are the interesting ones: for the *_correct outcomes, a low
     score means the model got the right answer while looking at the wrong
     thing entirely.
+
+    `crop_to_box` must be set for any checkpoint trained by
+    boxcrop_experiment.py -- it crops each image to its MegaDetector box
+    before running Grad-CAM (matching what the model actually saw during
+    training) and remaps the heatmap back onto the original frame before
+    scoring, via compute_boxcrop_cam. Feeding a box-crop-trained model the
+    full, uncropped frame it never trained on would be a distribution
+    mismatch; scoring the pointing game directly on the crop instead of
+    remapping it back would inflate the score mechanically, since the box
+    then covers most of a much smaller frame. Rows without a trustworthy
+    box (has_box False) fall back to the full frame either way, matching
+    crop_to_bbox's own training-time fallback.
     """
     checkpoint_path = checkpoint_path or f"models/checkpoint_{tag}.pt"
     out_dir = Path("metrics") / tag / "xai" / "attention_audit"
@@ -303,12 +386,14 @@ def run_attention_audit(
     data_cfg = _load_yaml(DEFAULT_DATA_CONFIG)["data"]
     manifest_path = manifest_path or data_cfg["manifest_path"]
     shards_dir = shards_dir or data_cfg["shards_dir"]
+    if box_crop_padding is None:
+        box_crop_padding = data_cfg.get("box_crop_padding", 0.15)
 
     manifest = pd.read_csv(manifest_path)
     predictions_path = predictions_path or f"data/predictions/test_predictions_{tag}.csv"
     predictions = pd.read_csv(predictions_path)
 
-    boxes = manifest[["image_id", "bbox", "project", "location"]]
+    boxes = manifest[["image_id", "bbox", "has_box", "project", "location"]]
     joined = predictions.merge(boxes, on="image_id", how="left")
     joined["bbox"] = joined["bbox"].apply(lambda b: json.loads(b) if isinstance(b, str) and b else None)
     joined = joined[joined["bbox"].notna()]
@@ -324,9 +409,12 @@ def run_attention_audit(
         if member_name not in reader:
             return None
         image = Image.open(io.BytesIO(reader.read(member_name))).convert("RGB")
-        input_tensor = DEFAULT_TRANSFORM(image).unsqueeze(0).to(device)
-        grayscale_cam = cam_builder(input_tensor=input_tensor, targets=[BinaryClassifierOutputTarget(1)])[0]
-        return pointing_game_score(grayscale_cam, row["bbox"])
+        if crop_to_box and row.get("has_box", False):
+            cam = compute_boxcrop_cam(cam_builder, image, row["bbox"], box_crop_padding)
+        else:
+            input_tensor = DEFAULT_TRANSFORM(image).unsqueeze(0).to(device)
+            cam = cam_builder(input_tensor=input_tensor, targets=[BinaryClassifierOutputTarget(1)])[0]
+        return pointing_game_score(cam, row["bbox"])
 
     all_scored = []
     summary: dict = {"tag": tag}
@@ -352,7 +440,11 @@ def run_attention_audit(
             member_name = safe_member_name(row["image_id"])
             image = Image.open(io.BytesIO(reader.read(member_name))).convert("RGB")
             title = f"{row['species']} ({outcome}, score={row['pointing_game_score']:.2f})"
-            compute_and_save_heatmap(cam_builder, image, heatmap_dir / f"{outcome}__{member_name}", title)
+            out_path = heatmap_dir / f"{outcome}__{member_name}"
+            if crop_to_box and row.get("has_box", False):
+                compute_and_save_boxcrop_heatmap(cam_builder, image, row["bbox"], box_crop_padding, out_path, title)
+            else:
+                compute_and_save_heatmap(cam_builder, image, out_path, title)
 
     scores_df = pd.concat(all_scored, ignore_index=True)
     scores_df.to_csv(out_dir / "attention_audit_scores.csv", index=False)
@@ -364,12 +456,14 @@ def run_attention_audit(
     zero_attention = scores_df[scores_df["pointing_game_score"] == 0.0]
     by_project = zero_attention["project"].value_counts()
     summary["zero_attention_count_by_project"] = by_project.head(15).to_dict()
+    summary["crop_to_box"] = crop_to_box
 
     (out_dir / "summary.json").write_text(json.dumps(summary, indent=2))
 
     with mlflow.start_run(run_name=f"attention_audit_{tag}"):
         mlflow.log_param("architecture", architecture)
         mlflow.log_param("checkpoint_path", str(checkpoint_path))
+        mlflow.log_param("crop_to_box", crop_to_box)
         for outcome in OUTCOME_DEFINITIONS:
             if summary[outcome]["pointing_game_mean"] is not None:
                 mlflow.log_metric(f"{outcome}_pointing_game_mean", summary[outcome]["pointing_game_mean"])
@@ -387,19 +481,23 @@ def run_attention_audit(
 def main() -> None:
     import sys
 
-    if len(sys.argv) < 2:
+    argv = sys.argv[1:]
+    crop_to_box = "--crop-to-box" in argv
+    argv = [a for a in argv if a != "--crop-to-box"]
+
+    if len(argv) < 1:
         raise SystemExit(
             "usage: python -m src.xai.gradcam <tag> [architecture] [test_split]\n"
-            "       python -m src.xai.gradcam <tag> --audit [architecture]"
+            "       python -m src.xai.gradcam <tag> --audit [architecture] [--crop-to-box]"
         )
-    tag = sys.argv[1]
-    if len(sys.argv) > 2 and sys.argv[2] == "--audit":
-        architecture = sys.argv[3] if len(sys.argv) > 3 else DEFAULT_ARCHITECTURE
-        run_attention_audit(tag=tag, architecture=architecture)
+    tag = argv[0]
+    if len(argv) > 1 and argv[1] == "--audit":
+        architecture = argv[2] if len(argv) > 2 else DEFAULT_ARCHITECTURE
+        run_attention_audit(tag=tag, architecture=architecture, crop_to_box=crop_to_box)
         return
 
-    architecture = sys.argv[2] if len(sys.argv) > 2 else DEFAULT_ARCHITECTURE
-    test_split = sys.argv[3] if len(sys.argv) > 3 else "test"
+    architecture = argv[1] if len(argv) > 1 else DEFAULT_ARCHITECTURE
+    test_split = argv[2] if len(argv) > 2 else "test"
     run_gradcam_analysis(tag=tag, architecture=architecture, test_split=test_split)
 
 

@@ -1,0 +1,41 @@
+{
+  "tag": "efficientnet_b3_boxcrop",
+  "bird_correct": {
+    "n_scored": 9026,
+    "pointing_game_mean": 0.40653651651621525,
+    "pointing_game_median": 0.2546870559453964
+  },
+  "mammal_correct": {
+    "n_scored": 5761,
+    "pointing_game_mean": 0.9321140631932472,
+    "pointing_game_median": 0.9365073442459106
+  },
+  "false_positive": {
+    "n_scored": 153,
+    "pointing_game_mean": 0.8550222130976252,
+    "pointing_game_median": 0.9595146775245667
+  },
+  "false_negative": {
+    "n_scored": 125,
+    "pointing_game_mean": 0.8993541033202782,
+    "pointing_game_median": 0.9867520928382874
+  },
+  "zero_attention_count_by_project": {
+    "EFD": 9,
+    "EFH": 7,
+    "Z20": 6,
+    "AIV": 6,
+    "RMV": 4,
+    "KCR": 3,
+    "RKU": 3,
+    "PS1": 3,
+    "DWT": 2,
+    "MAS": 2,
+    "TR1": 2,
+    "MLP": 1,
+    "RMP": 1,
+    "MLV": 1,
+    "SWG": 1
+  },
+  "crop_to_box": true
+}
