@@ -1,0 +1,49 @@
+{
+  "tag": "efficientnet_b3",
+  "n_per_outcome": 200,
+  "n_steps": 20,
+  "crop_to_box": false,
+  "seed": 42,
+  "bird_correct": {
+    "n_scored": 200,
+    "gradcam_mean": 0.09026499381492613,
+    "gradcam_median": 0.0,
+    "ig_mammal_target_mean": 0.1882298841071315,
+    "ig_mammal_target_median": 0.14321965724229813,
+    "ig_mean": 0.18933172285323963,
+    "ig_median": 0.1482531949877739
+  },
+  "mammal_correct": {
+    "n_scored": 200,
+    "gradcam_mean": 0.6342286407854408,
+    "gradcam_median": 0.6909902989864349,
+    "ig_mammal_target_mean": 0.37129328604089096,
+    "ig_mammal_target_median": 0.34704624116420746,
+    "ig_mean": 0.37129328604089096,
+    "ig_median": 0.34704624116420746
+  },
+  "false_positive": {
+    "n_scored": 200,
+    "gradcam_mean": 0.1637742057101059,
+    "gradcam_median": 0.0695139728486538,
+    "ig_mammal_target_mean": 0.17094912449654656,
+    "ig_mammal_target_median": 0.15926961600780487,
+    "ig_mean": 0.17094912449654656,
+    "ig_median": 0.15926961600780487
+  },
+  "false_negative": {
+    "n_scored": 159,
+    "gradcam_mean": 0.3919943283748745,
+    "gradcam_median": 0.35184821486473083,
+    "ig_mammal_target_mean": 0.22570803848976773,
+    "ig_mammal_target_median": 0.16842932999134064,
+    "ig_mean": 0.2266181878542012,
+    "ig_median": 0.17046816647052765
+  },
+  "gradcam_vs_ig_mammal_target": {
+    "pearson_r": 0.7163589042037728,
+    "pearson_p": 1.9005116387774692e-120,
+    "spearman_r": 0.678611373537504,
+    "spearman_p": 1.5298240473635995e-103
+  }
+}
