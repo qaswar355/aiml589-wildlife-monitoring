@@ -1,0 +1,41 @@
+{
+  "tag": "efficientnet_b3_seasonal_boxcrop",
+  "bird_correct": {
+    "n_scored": 17368,
+    "pointing_game_mean": 0.35047294369335785,
+    "pointing_game_median": 0.06003686599433422
+  },
+  "mammal_correct": {
+    "n_scored": 11968,
+    "pointing_game_mean": 0.9625780641106632,
+    "pointing_game_median": 0.9659645557403564
+  },
+  "false_positive": {
+    "n_scored": 373,
+    "pointing_game_mean": 0.9061459769832413,
+    "pointing_game_median": 0.9773471355438232
+  },
+  "false_negative": {
+    "n_scored": 287,
+    "pointing_game_mean": 0.8816552937672902,
+    "pointing_game_median": 0.9789034128189087
+  },
+  "zero_attention_count_by_project": {
+    "EFH": 245,
+    "EFD": 163,
+    "DWT": 104,
+    "Z20": 97,
+    "RMP": 78,
+    "PS1": 73,
+    "DW2": 67,
+    "PS3": 20,
+    "KCR": 9,
+    "FGA": 9,
+    "MAW": 5,
+    "AHO": 5,
+    "ACC": 3,
+    "ZIO": 2,
+    "R29": 1
+  },
+  "crop_to_box": true
+}
