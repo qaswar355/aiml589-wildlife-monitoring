@@ -1,5 +1,7 @@
 """Tests for load_checkpoint -- the shared checkpoint-loading helper used
 by evaluate.py, gradcam.py, and the inference API."""
+import warnings
+
 import torch
 
 from src.models.classifier import WildlifeClassifier, load_checkpoint
@@ -63,6 +65,25 @@ def test_predict_proba_mc_dropout_does_not_mutate_batchnorm_running_stats(tmp_pa
     for bn, (mean_before, var_before) in zip(bn_layers, before):
         assert torch.equal(bn.running_mean, mean_before)
         assert torch.equal(bn.running_var, var_before)
+
+
+def test_predict_proba_single_pass_uncertainty_is_exactly_zero(tmp_path):
+    """Regression test: predict_proba(mc_dropout_passes=1) used to return
+    NaN for uncertainty (torch.std's default unbiased estimator divides
+    by zero on a single sample), contradicting the method's own
+    docstring ("uncertainty is exactly 0"). predict.py silently discards
+    this value for the deterministic pass today, which is why the bug
+    went unnoticed, but any future caller that reads it should get the
+    documented 0, not NaN."""
+    _, checkpoint_path = _save_tiny_checkpoint(tmp_path)
+    model = load_checkpoint(str(checkpoint_path), architecture="efficientnet_b3")
+
+    x = torch.randn(1, 3, 300, 300)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")  # torch's degenerate-std warning would now raise
+        _, std = model.predict_proba(x, mc_dropout_passes=1)
+
+    assert torch.equal(std, torch.zeros_like(std))
 
 
 def test_predict_proba_mc_dropout_leaves_model_in_eval_mode_after(tmp_path):

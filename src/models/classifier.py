@@ -91,7 +91,12 @@ class WildlifeClassifier(nn.Module):
             )
 
         self.train(was_training)
-        return passes.mean(dim=0), passes.std(dim=0)
+        mean = passes.mean(dim=0)
+        # torch.std's default (unbiased, N-1 denominator) divides by zero on a
+        # single pass, returning NaN rather than the 0 this docstring promises
+        # -- explicit for N=1 instead of relying on the degenerate case.
+        std = passes.std(dim=0) if passes.shape[0] > 1 else torch.zeros_like(mean)
+        return mean, std
 
 
 def load_checkpoint(
