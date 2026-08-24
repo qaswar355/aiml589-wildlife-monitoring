@@ -1,0 +1,41 @@
+{
+  "tag": "efficientnet_b3",
+  "n_val_images": 8012,
+  "n_errors": 234,
+  "error_rate": 0.029206190713929107,
+  "mc_dropout_passes": 20,
+  "threshold_used": 0.95,
+  "uncertainty_vs_error_auc": 0.9246614931881066,
+  "mean_uncertainty_correct": 0.00025220972020179033,
+  "mean_uncertainty_incorrect": 0.012451991438865662,
+  "candidate_cutoffs": [
+    {
+      "percentile": 80,
+      "cutoff": 5.52653148133686e-07,
+      "flagged_fraction": 0.20007488766849726,
+      "error_capture_rate": 0.8717948717948718,
+      "precision_of_flagging": 0.1272613849033063
+    },
+    {
+      "percentile": 90,
+      "cutoff": 6.653158379776869e-06,
+      "flagged_fraction": 0.100099850224663,
+      "error_capture_rate": 0.7649572649572649,
+      "precision_of_flagging": 0.2231920199501247
+    },
+    {
+      "percentile": 95,
+      "cutoff": 0.00020325442892499268,
+      "flagged_fraction": 0.0500499251123315,
+      "error_capture_rate": 0.6367521367521367,
+      "precision_of_flagging": 0.371571072319202
+    },
+    {
+      "percentile": 99,
+      "cutoff": 0.022551722824573517,
+      "flagged_fraction": 0.010109835247129306,
+      "error_capture_rate": 0.2264957264957265,
+      "precision_of_flagging": 0.654320987654321
+    }
+  ]
+}

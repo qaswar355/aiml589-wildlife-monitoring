@@ -1,0 +1,9 @@
+{
+  "tag": "efficientnet_b3",
+  "n_val_images": 8012,
+  "temperature": 3.2009270191192627,
+  "nll_before": 0.18559810519218445,
+  "nll_after": 0.07948090881109238,
+  "ece_before": 0.02127057801201171,
+  "ece_after": 0.005123799457528619
+}
