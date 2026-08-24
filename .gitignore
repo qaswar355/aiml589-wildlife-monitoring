@@ -63,3 +63,6 @@ emissions.csv
 
 # Ad-hoc screenshots from manually testing the live demo — not project files
 /testing_screenshots/
+
+# Personal instructions for Claude — not part of the codebase
+/CLAUDE.md
