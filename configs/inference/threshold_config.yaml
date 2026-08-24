@@ -3,7 +3,14 @@
 # Prioritises recall (minimise false negatives = missed invasive mammals).
 # Updated after each retraining cycle.
 thresholds:
-  default: 0.5         # placeholder — set after first training run
+  # Calibrated from data/predictions/test_predictions_efficientnet_b3.csv's
+  # real PR curve: precision 90.5%, recall 96.7% at this threshold (vs.
+  # 88.6%/97.3% at the old 0.5 placeholder) -- recall stays well above the
+  # 0.90 floor below. Zone-specific thresholds intentionally left at their
+  # 0.5 placeholder: no zone-level breakdown exists to calibrate them from,
+  # and fiordland in particular (a high-sensitivity zone) shouldn't silently
+  # inherit a precision-favouring threshold tuned for the whole dataset.
+  default: 0.95
   north_island: 0.5
   south_island: 0.5
   fiordland: 0.5       # high-sensitivity zone (critical kiwi habitat)
