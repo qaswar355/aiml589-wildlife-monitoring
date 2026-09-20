@@ -1,0 +1,52 @@
+{
+  "tag": "efficientnet_b3_vs_external",
+  "architecture": "efficientnet_b3",
+  "checkpoint_path": "models/checkpoint_efficientnet_b3.pt",
+  "confidence_drift": {
+    "drift_score": 0.8567961190037117,
+    "method": "wasserstein_normed",
+    "threshold": 0.1,
+    "drifted": true
+  },
+  "concept_drift": {
+    "threshold_used": 0.5,
+    "baseline_metrics": {
+      "accuracy": 0.9406419949595437,
+      "precision": 0.8861209964412812,
+      "recall": 0.972986748216106,
+      "f1": 0.9275244959106
+    },
+    "current_metrics": {
+      "accuracy": 0.9061662198391421,
+      "precision": 0.9207180254300673,
+      "recall": 0.946923076923077,
+      "f1": 0.9336367083807356
+    },
+    "deltas": {
+      "accuracy": -0.034475775120401564,
+      "precision": 0.03459702898878614,
+      "recall": -0.026063671293029,
+      "f1": 0.006112212470135603
+    },
+    "score_distribution_shift": {
+      "mammal": {
+        "statistic": 0.658528712198437,
+        "p_value": 2.495e-321,
+        "n_baseline": 5886,
+        "n_current": 1300
+      },
+      "bird": {
+        "statistic": 0.7239284641512049,
+        "p_value": 9.082892117655895e-281,
+        "n_baseline": 9192,
+        "n_current": 565
+      }
+    },
+    "metric_drop_tolerance": 0.03,
+    "drifted": true
+  },
+  "xai_centroid_drift": null,
+  "retrain_recommended": true,
+  "retrain_rationale": "concept_drift.drifted is the deciding signal (labelled correctness actually degraded beyond tolerance); confidence_drift and xai_centroid_drift are reported as corroborating context, not tie-breakers.",
+  "retrain_runbook_path": "metrics/drift/efficientnet_b3_vs_external/retrain_runbook.sh"
+}

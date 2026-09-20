@@ -1,0 +1,76 @@
+{
+  "tag": "efficientnet_b3",
+  "architecture": "efficientnet_b3",
+  "checkpoint_path": "models/checkpoint_efficientnet_b3.pt",
+  "threshold": 0.95,
+  "n_frames": 1865,
+  "n_events": 444,
+  "frame_level": {
+    "n_images": 1865,
+    "accuracy": 0.8879356568364611,
+    "precision": 0.9611158072696534,
+    "recall": 0.8746153846153846,
+    "f1": 0.9158276278695127,
+    "precision_macro": 0.8610564373591669,
+    "recall_macro": 0.8965997277059223,
+    "f1_macro": 0.8741126912402897,
+    "precision_per_class": [
+      0.7609970674486803,
+      0.9611158072696534
+    ],
+    "recall_per_class": [
+      0.9185840707964602,
+      0.8746153846153846
+    ],
+    "f1_per_class": [
+      0.8323977546110666,
+      0.9158276278695127
+    ],
+    "confusion_matrix": [
+      [
+        519,
+        46
+      ],
+      [
+        163,
+        1137
+      ]
+    ],
+    "roc_auc": 0.9505425459496256,
+    "pr_auc": 0.9715042911028662
+  },
+  "event_level": {
+    "n_images": 444,
+    "accuracy": 0.8761261261261262,
+    "precision": 0.9357429718875502,
+    "recall": 0.8566176470588235,
+    "f1": 0.8944337811900192,
+    "precision_macro": 0.8678714859437751,
+    "recall_macro": 0.881797195622435,
+    "f1_macro": 0.8722850104860178,
+    "precision_per_class": [
+      0.8,
+      0.9357429718875502
+    ],
+    "recall_per_class": [
+      0.9069767441860465,
+      0.8566176470588235
+    ],
+    "f1_per_class": [
+      0.8501362397820164,
+      0.8944337811900192
+    ],
+    "confusion_matrix": [
+      [
+        156,
+        16
+      ],
+      [
+        39,
+        233
+      ]
+    ],
+    "roc_auc": 0.9508806429548563,
+    "pr_auc": 0.963379348606253
+  }
+}
