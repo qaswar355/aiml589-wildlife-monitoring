@@ -315,15 +315,35 @@ def run_evaluation(
 def main() -> None:
     import sys
 
-    architecture = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_ARCHITECTURE
-    test_split = sys.argv[2] if len(sys.argv) > 2 else "test"
+    argv = sys.argv[1:]
+    checkpoint_path_override = None
+    tag_override = None
+    for flag, attr in (("--checkpoint-path", "checkpoint_path_override"), ("--tag", "tag_override")):
+        if flag in argv:
+            i = argv.index(flag)
+            value = argv[i + 1]
+            argv = argv[:i] + argv[i + 2 :]
+            if attr == "checkpoint_path_override":
+                checkpoint_path_override = value
+            else:
+                tag_override = value
+
+    architecture = argv[0] if len(argv) > 0 else DEFAULT_ARCHITECTURE
+    test_split = argv[1] if len(argv) > 1 else "test"
 
     if test_split == "boxcrop":
         # Box-crop experiment: same site-based test rows as the main
         # baseline, just cropped to their MegaDetector box first, matching
-        # how the box-crop checkpoint was trained.
-        tag = f"{architecture}_boxcrop"
-        run_evaluation(architecture=architecture, tag=tag, test_split="test", crop_to_box=True)
+        # how the box-crop checkpoint was trained. --checkpoint-path/--tag
+        # override the plain-box-crop defaults -- needed for evaluating a
+        # retrained checkpoint (see src.training.boxcrop_experiment's
+        # --manifest-path/--tag options) without colliding with the
+        # original box-crop run's own tag/checkpoint.
+        tag = tag_override or f"{architecture}_boxcrop"
+        run_evaluation(
+            architecture=architecture, tag=tag, test_split="test", crop_to_box=True,
+            checkpoint_path=checkpoint_path_override,
+        )
         return
 
     if test_split == "seasonal_boxcrop":
@@ -331,12 +351,15 @@ def main() -> None:
         # rows as the plain seasonal experiment, cropped to their
         # MegaDetector box first, matching how the seasonal_boxcrop
         # checkpoint was trained.
-        tag = f"{architecture}_seasonal_boxcrop"
-        run_evaluation(architecture=architecture, tag=tag, test_split="seasonal", crop_to_box=True)
+        tag = tag_override or f"{architecture}_seasonal_boxcrop"
+        run_evaluation(
+            architecture=architecture, tag=tag, test_split="seasonal", crop_to_box=True,
+            checkpoint_path=checkpoint_path_override,
+        )
         return
 
-    tag = f"{architecture}_seasonal" if test_split == "seasonal" else architecture
-    run_evaluation(architecture=architecture, tag=tag, test_split=test_split)
+    tag = tag_override or (f"{architecture}_seasonal" if test_split == "seasonal" else architecture)
+    run_evaluation(architecture=architecture, tag=tag, test_split=test_split, checkpoint_path=checkpoint_path_override)
 
 
 if __name__ == "__main__":

@@ -20,7 +20,16 @@ box_crop_padding) before being resized to 300x300. Images without a
 trustworthy box fall back to the full, uncropped frame -- see
 src.training.dataset.crop_to_bbox.
 
-Run: python -m src.training.boxcrop_experiment [model-config-path]
+Run: python -m src.training.boxcrop_experiment [model-config-path] [--manifest-path PATH] [--tag TAG]
+     (--manifest-path overrides configs/data/default.yaml's manifest_path
+     -- used for retraining on data/manifest_combined.csv, see
+     src/external_data/combine_manifests.py, without changing the shared
+     config and silently redirecting every other script that reads it.
+     --tag distinguishes the resulting checkpoint/run name from a plain
+     box-crop run so a combined-data retrain doesn't overwrite
+     models/checkpoint_<architecture>_boxcrop.pt; defaults to
+     "<architecture>_boxcrop_retrained" whenever --manifest-path is
+     given, or "<architecture>_boxcrop" otherwise.)
 """
 from __future__ import annotations
 
@@ -43,17 +52,26 @@ from src.training.train import (
 )
 
 
-def main(max_epochs: int | None = None, model_config_path: str = DEFAULT_MODEL_CONFIG) -> None:
+def main(
+    max_epochs: int | None = None,
+    model_config_path: str = DEFAULT_MODEL_CONFIG,
+    manifest_path: str | None = None,
+    tag: str | None = None,
+) -> None:
     data_cfg = _load_yaml(DEFAULT_DATA_CONFIG)["data"]
     training_cfg = _load_yaml(DEFAULT_TRAINING_CONFIG)["training"]
     model_cfg = _load_yaml(model_config_path)["model"]
     architecture = model_cfg["architecture"]
 
+    manifest_path = manifest_path or data_cfg["manifest_path"]
+    is_retrain = manifest_path != data_cfg["manifest_path"]
+    tag = tag or (f"{architecture}_boxcrop_retrained" if is_retrain else f"{architecture}_boxcrop")
+
     num_workers = int(os.environ.get("NUM_WORKERS", training_cfg.get("num_workers", 0)))
     box_crop_padding = data_cfg.get("box_crop_padding", 0.15)
 
     train_loader, val_loader, train_ds, val_ds = build_dataloaders(
-        manifest_path=data_cfg["manifest_path"],
+        manifest_path=manifest_path,
         shards_dir=data_cfg["shards_dir"],
         batch_size=training_cfg["batch_size"],
         num_workers=num_workers,
@@ -96,11 +114,13 @@ def main(max_epochs: int | None = None, model_config_path: str = DEFAULT_MODEL_C
         enable_checkpointing=False,
     )
 
-    with mlflow.start_run(run_name=f"{architecture}_boxcrop_experiment"):
+    with mlflow.start_run(run_name=f"{tag}_experiment"):
         mlflow.log_params(
             {
                 "architecture": architecture,
                 "experiment": "box_crop",
+                "manifest_path": manifest_path,
+                "is_retrain_on_combined_data": is_retrain,
                 "box_crop_padding": box_crop_padding,
                 "pretrained": model_cfg["pretrained"],
                 "batch_size": training_cfg["batch_size"],
@@ -125,18 +145,25 @@ def main(max_epochs: int | None = None, model_config_path: str = DEFAULT_MODEL_C
         )
         print(f"  confusion matrix (rows=true, cols=pred) [bird, mammal]:\n{val_metrics['confusion_matrix']}")
 
-    checkpoint_path = Path(f"models/checkpoint_{architecture}_boxcrop.pt")
+    checkpoint_path = Path(f"models/checkpoint_{tag}.pt")
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
     torch.save(module.model.state_dict(), checkpoint_path)
     print(f"wrote {checkpoint_path}")
     print(
         f"for the full predictions CSV + plots, run: "
-        f"python -m src.training.evaluate {architecture} boxcrop"
+        f"python -m src.training.evaluate {architecture} boxcrop --checkpoint-path {checkpoint_path} --tag {tag}"
+        if is_retrain
+        else f"for the full predictions CSV + plots, run: python -m src.training.evaluate {architecture} boxcrop"
     )
 
 
 if __name__ == "__main__":
-    import sys
+    import argparse
 
-    model_config = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_MODEL_CONFIG
-    main(model_config_path=model_config)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("model_config_path", nargs="?", default=DEFAULT_MODEL_CONFIG)
+    parser.add_argument("--manifest-path", default=None)
+    parser.add_argument("--tag", default=None)
+    args = parser.parse_args()
+
+    main(model_config_path=args.model_config_path, manifest_path=args.manifest_path, tag=args.tag)
