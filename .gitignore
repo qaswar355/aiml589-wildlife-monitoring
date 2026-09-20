@@ -66,3 +66,18 @@ emissions.csv
 
 # Personal instructions for Claude — not part of the codebase
 /CLAUDE.md
+
+# External dataset images (supervisor-provided, ~2.6GB) — raw data, not code.
+# Was previously a blanket "/src/external_data/" ignore, which also hid
+# every .py script living in the same directory from git entirely (never
+# actually tracked, since the directory's creation) -- narrowed to just
+# the actual image data so the pipeline code gets version-controlled.
+/src/external_data/birds_and_mammals/
+/src/external_data/birds_and_mammals.zip
+/src/external_data/.DS_Store
+
+# Report comparison figures — generated for the write-up, not project outputs
+/metrics/comparisons/
+
+# Working notes for the progress report — not part of the codebase
+/REPORT_NOTES.txt
