@@ -101,6 +101,7 @@ celery==5.6.3
     #   dvc-task
 certifi==2026.5.20
     # via
+    #   datadog-api-client
     #   evidently
     #   httpcore
     #   httpx
@@ -160,6 +161,8 @@ databricks-sdk==0.111.0
     # via
     #   mlflow-skinny
     #   mlflow-tracing
+datadog-api-client==2.60.0
+    # via -r requirements.in
 ddtrace==4.9.0
     # via -r requirements.in
 deprecation==2.1.0
@@ -602,6 +605,7 @@ python-dateutil==2.9.0.post0
     #   arrow
     #   botocore
     #   celery
+    #   datadog-api-client
     #   graphene
     #   matplotlib
     #   pandas
@@ -801,6 +805,7 @@ typing-extensions==4.15.0
     #   alembic
     #   altair
     #   asyncssh
+    #   datadog-api-client
     #   fastapi
     #   graphene
     #   huggingface-hub
@@ -838,6 +843,7 @@ ujson==5.12.1
 urllib3==2.7.0
     # via
     #   botocore
+    #   datadog-api-client
     #   docker
     #   dulwich
     #   evidently
