@@ -1,0 +1,104 @@
+# Design system: the dataviz skill's validated reference palette
+# (references/palette.md), mapped onto Streamlit's native theming --
+# per Streamlit's own bundled guidance, native config.toml theming is
+# preferred over custom CSS/HTML for colors, fonts, and backgrounds
+# (more maintainable, won't break across Streamlit versions). Custom
+# HTML is reserved in src/review_app/theme.py only for the one thing
+# native theming can't do: mapping domain status names (good/warning/
+# serious/critical) onto st.badge's fixed named-color palette.
+#
+# [theme.light] + [theme.dark] both defined -- gives a real, native
+# light/dark toggle in the app's settings menu, tuned to the same
+# validated palette in both directions.
+#
+# A handful of options (baseFontSize/baseFontWeight/chartCategoricalColors/
+# chartSequentialColors/showSidebarBorder) are only registered at the
+# top-level [theme] in this installed Streamlit version, not per
+# light/dark variant (confirmed directly against the installed
+# streamlit.config module's option registry, not assumed from docs) --
+# they apply to both modes uniformly. Categorical/sequential use the
+# LIGHT-surface steps for both (the light ordering is the
+# better-performing of the two per the palette's own validation notes:
+# worst adjacent CVD delta-E 9.1 light vs 8.4 dark).
+
+[client]
+toolbarMode = "minimal"
+
+[theme]
+baseFontSize = 16
+baseFontWeight = 400
+showSidebarBorder = true
+chartCategoricalColors = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7", "#e34948"]
+chartSequentialColors = ["#b7d3f6", "#9ec5f4", "#86b6ef", "#6da7ec", "#5598e7", "#3987e5", "#2a78d6", "#1c5cab", "#184f95", "#104281"]
+
+[theme.light]
+primaryColor = "#2a78d6"
+backgroundColor = "#fcfcfb"
+secondaryBackgroundColor = "#f9f9f7"
+textColor = "#0b0b0b"
+linkColor = "#2a78d6"
+codeTextColor = "#0b0b0b"
+codeBackgroundColor = "#f9f9f7"
+borderColor = "#e1e0d9"
+dataframeBorderColor = "#e1e0d9"
+dataframeHeaderBackgroundColor = "#f9f9f7"
+
+redColor = "#d03b3b"
+orangeColor = "#ec835a"
+yellowColor = "#fab219"
+greenColor = "#0ca30c"
+blueColor = "#2a78d6"
+violetColor = "#4a3aa7"
+grayColor = "#898781"
+
+baseRadius = "large"
+buttonRadius = "large"
+showWidgetBorder = true
+
+font = "sans serif"
+headingFontSizes = ["40px", "28px", "22px", "18px", "16px", "14px"]
+headingFontWeights = [600, 600, 600, 600, 500, 500]
+linkUnderline = false
+
+[theme.light.sidebar]
+backgroundColor = "#f9f9f7"
+secondaryBackgroundColor = "#fcfcfb"
+textColor = "#0b0b0b"
+borderColor = "#e1e0d9"
+primaryColor = "#2a78d6"
+
+[theme.dark]
+primaryColor = "#3987e5"
+backgroundColor = "#1a1a19"
+secondaryBackgroundColor = "#0d0d0d"
+textColor = "#ffffff"
+linkColor = "#3987e5"
+codeTextColor = "#ffffff"
+codeBackgroundColor = "#0d0d0d"
+borderColor = "#2c2c2a"
+dataframeBorderColor = "#2c2c2a"
+dataframeHeaderBackgroundColor = "#0d0d0d"
+
+redColor = "#d03b3b"
+orangeColor = "#ec835a"
+yellowColor = "#fab219"
+greenColor = "#0ca30c"
+blueColor = "#3987e5"
+violetColor = "#9085e9"
+grayColor = "#c3c2b7"
+
+baseRadius = "large"
+buttonRadius = "large"
+showWidgetBorder = true
+
+font = "sans serif"
+headingFontSizes = ["40px", "28px", "22px", "18px", "16px", "14px"]
+headingFontWeights = [600, 600, 600, 600, 500, 500]
+linkUnderline = false
+
+[theme.dark.sidebar]
+backgroundColor = "#0d0d0d"
+secondaryBackgroundColor = "#1a1a19"
+textColor = "#ffffff"
+borderColor = "#2c2c2a"
+primaryColor = "#3987e5"
