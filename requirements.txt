@@ -4,6 +4,8 @@
 #
 #    pip-compile --output-file=requirements.txt requirements.in
 #
+absl-py==2.5.0
+    # via tensorboard
 aiobotocore==3.7.0
     # via
     #   dvc-s3
@@ -58,6 +60,8 @@ appdirs==1.4.4
     # via iterative-telemetry
 arrow==1.4.0
     # via codecarbon
+asttokens==3.0.2
+    # via stack-data
 asyncssh==2.23.0
     # via scmrepo
 atpublic==7.0.0
@@ -79,7 +83,9 @@ blinker==1.9.0
     #   flask
     #   streamlit
 boto3==1.43.0
-    # via -r requirements.in
+    # via
+    #   -r requirements.in
+    #   yolov5
 botocore==1.43.0
     # via
     #   aiobotocore
@@ -126,6 +132,7 @@ click==8.4.1
     #   mlflow-skinny
     #   nltk
     #   rich-click
+    #   sahi
     #   streamlit
     #   typer
     #   uvicorn
@@ -212,6 +219,8 @@ envier==0.6.1
     # via ddtrace
 evidently==0.7.21
     # via -r requirements.in
+executing==2.2.1
+    # via stack-data
 faker==40.19.1
     # via polyfactory
 fastapi==0.136.3
@@ -224,6 +233,10 @@ filelock==3.29.0
     #   huggingface-hub
     #   iterative-telemetry
     #   torch
+fire==0.7.1
+    # via
+    #   sahi
+    #   yolov5
 flask==3.1.3
     # via
     #   flask-cors
@@ -268,6 +281,7 @@ gitpython==3.1.50
     #   mlflow-skinny
     #   scmrepo
     #   streamlit
+    #   yolov5
 google-auth==2.53.0
     # via databricks-sdk
 grad-cam==1.5.5
@@ -282,6 +296,8 @@ graphql-core==3.2.8
     #   graphql-relay
 graphql-relay==3.2.0
     # via graphene
+grpcio==1.84.0
+    # via tensorboard
 gto==1.9.0
     # via dvc
 gunicorn==25.3.0
@@ -305,7 +321,11 @@ httpx==0.28.1
 huey==2.6.0
     # via mlflow
 huggingface-hub==1.16.4
-    # via timm
+    # via
+    #   timm
+    #   yolov5
+humanfriendly==10.0
+    # via megadetector
 hydra-core==1.3.2
     # via
     #   -r requirements.in
@@ -318,6 +338,10 @@ idna==3.16
     #   yarl
 importlib-metadata==9.0.0
     # via mlflow-skinny
+ipython==9.17.1
+    # via yolov5
+ipython-pygments-lexers==1.1.1
+    # via ipython
 iterative-telemetry==0.0.10
     # via
     #   dvc
@@ -326,6 +350,8 @@ itsdangerous==2.2.0
     # via
     #   flask
     #   streamlit
+jedi==0.20.0
+    # via ipython
 jinja2==3.1.6
     # via
     #   altair
@@ -343,6 +369,8 @@ joblib==1.5.3
     #   scikit-learn
 joserfc==1.6.8
     # via authlib
+jsonpickle==4.1.2
+    # via megadetector
 jsonschema==4.26.0
     # via altair
 jsonschema-specifications==2025.9.1
@@ -364,6 +392,8 @@ litestar-htmx==0.5.0
     # via litestar
 mako==1.3.12
     # via alembic
+markdown==3.10.3
+    # via tensorboard
 markdown-it-py==4.2.0
     # via rich
 markupsafe==3.0.3
@@ -377,10 +407,17 @@ matplotlib==3.10.9
     #   -r requirements.in
     #   captum
     #   grad-cam
+    #   megadetector
     #   mlflow
+    #   sahi
     #   seaborn
+    #   yolov5
+matplotlib-inline==0.2.2
+    # via ipython
 mdurl==0.1.2
     # via markdown-it-py
+megadetector==5.0.3
+    # via -r requirements.in
 mlflow==3.12.0
     # via -r requirements.in
 mlflow-skinny==3.12.0
@@ -419,6 +456,7 @@ numpy==2.4.6
     #   evidently
     #   grad-cam
     #   matplotlib
+    #   megadetector
     #   mlflow
     #   opencv-python
     #   opencv-python-headless
@@ -426,14 +464,18 @@ numpy==2.4.6
     #   pandas
     #   patsy
     #   pydeck
+    #   sahi
     #   scikit-learn
     #   scipy
     #   seaborn
+    #   shapely
     #   skops
     #   statsmodels
     #   streamlit
+    #   tensorboard
     #   torchmetrics
     #   torchvision
+    #   yolov5
 nvidia-ml-py==13.595.45
     # via codecarbon
 omegaconf==2.3.0
@@ -442,7 +484,11 @@ omegaconf==2.3.0
     #   dvc
     #   hydra-core
 opencv-python==4.13.0.92
-    # via grad-cam
+    # via
+    #   grad-cam
+    #   megadetector
+    #   sahi
+    #   yolov5
 opencv-python-headless==4.13.0.92
     # via
     #   albucore
@@ -491,29 +537,40 @@ packaging==26.2
     #   skops
     #   statsmodels
     #   streamlit
+    #   tensorboard
     #   torchmetrics
 pandas[parquet]==2.3.3
     # via
     #   -r requirements.in
     #   codecarbon
     #   evidently
+    #   megadetector
     #   mlflow
     #   seaborn
     #   statsmodels
     #   streamlit
+    #   yolov5
+parso==0.8.7
+    # via jedi
 pathspec==1.1.1
     # via
     #   dvc
     #   scmrepo
 patsy==1.0.2
     # via statsmodels
+pexpect==4.9.0
+    # via ipython
 pillow==12.2.0
     # via
     #   -r requirements.in
     #   grad-cam
     #   matplotlib
+    #   megadetector
+    #   sahi
     #   streamlit
+    #   tensorboard
     #   torchvision
+    #   yolov5
 platformdirs==4.9.6
     # via dvc
 plotly==5.24.1
@@ -529,6 +586,7 @@ prometheus-client==0.25.0
 prompt-toolkit==3.0.52
     # via
     #   click-repl
+    #   ipython
     #   questionary
 propcache==0.5.2
     # via
@@ -541,13 +599,20 @@ protobuf==6.33.6
     #   mlflow-tracing
     #   opentelemetry-proto
     #   streamlit
+    #   tensorboard
 psutil==7.2.2
     # via
     #   codecarbon
     #   dvc
     #   flufl-lock
+    #   ipython
+    #   yolov5
 psycopg2-binary==2.9.12
     # via -r requirements.in
+ptyprocess==0.7.0
+    # via pexpect
+pure-eval==0.2.4
+    # via stack-data
 py-cpuinfo==9.0.0
     # via codecarbon
 pyarrow==23.0.1
@@ -586,7 +651,10 @@ pydot==4.0.1
 pygit2==1.19.2
     # via scmrepo
 pygments==2.20.0
-    # via rich
+    # via
+    #   ipython
+    #   ipython-pygments-lexers
+    #   rich
 pygtrie==2.5.0
     # via
     #   dvc
@@ -599,6 +667,8 @@ pyparsing==3.3.2
     #   grandalf
     #   matplotlib
     #   pydot
+pyqtree==1.0.0
+    # via megadetector
 python-dateutil==2.9.0.post0
     # via
     #   aiobotocore
@@ -629,12 +699,15 @@ pyyaml==6.0.3
     #   evidently
     #   huggingface-hub
     #   litestar
+    #   megadetector
     #   mlflow-skinny
     #   omegaconf
     #   optuna
     #   pytorch-lightning
+    #   sahi
     #   timm
     #   uvicorn
+    #   yolov5
 questionary==2.1.1
     # via codecarbon
 rapidfuzz==3.14.5
@@ -655,8 +728,11 @@ requests==2.34.2
     #   dvc-studio-client
     #   evidently
     #   iterative-telemetry
+    #   megadetector
     #   mlflow-skinny
+    #   sahi
     #   streamlit
+    #   yolov5
 rich==15.0.0
     # via
     #   codecarbon
@@ -682,11 +758,14 @@ s3transfer==0.17.1
     # via boto3
 safetensors==0.7.0
     # via timm
+sahi==0.12.6
+    # via yolov5
 scikit-learn==1.8.0
     # via
     #   -r requirements.in
     #   evidently
     #   grad-cam
+    #   megadetector
     #   mlflow
     #   skops
 scipy==1.17.1
@@ -697,16 +776,22 @@ scipy==1.17.1
     #   scikit-learn
     #   skops
     #   statsmodels
+    #   yolov5
 scmrepo==3.6.2
     # via
     #   dvc
     #   gto
 seaborn==0.13.2
-    # via -r requirements.in
+    # via
+    #   -r requirements.in
+    #   megadetector
+    #   yolov5
 semver==3.0.4
     # via gto
 sentry-sdk[fastapi]==2.60.0
     # via -r requirements.in
+shapely==2.1.2
+    # via sahi
 shellingham==1.5.4
     # via typer
 shortuuid==1.0.13
@@ -735,6 +820,8 @@ sqlparse==0.5.5
     # via mlflow-skinny
 sqltrie==0.11.2
     # via dvc-data
+stack-data==0.6.3
+    # via ipython
 starlette==0.52.1
     # via
     #   fastapi
@@ -756,6 +843,14 @@ tenacity==9.1.4
     # via
     #   plotly
     #   streamlit
+tensorboard==2.21.0
+    # via yolov5
+tensorboard-data-server==0.7.2
+    # via tensorboard
+termcolor==3.3.0
+    # via fire
+thop==0.1.1.post2209072238
+    # via yolov5
 threadpoolctl==3.6.0
     # via scikit-learn
 timm==1.0.27
@@ -769,17 +864,22 @@ torch==2.12.0
     #   -r requirements.in
     #   captum
     #   grad-cam
+    #   megadetector
     #   pytorch-lightning
+    #   thop
     #   timm
     #   torchmetrics
     #   torchvision
+    #   yolov5
 torchmetrics==1.9.0
     # via pytorch-lightning
 torchvision==0.27.0
     # via
     #   -r requirements.in
     #   grad-cam
+    #   megadetector
     #   timm
+    #   yolov5
 tqdm==4.67.3
     # via
     #   captum
@@ -788,10 +888,17 @@ tqdm==4.67.3
     #   fsspec
     #   grad-cam
     #   huggingface-hub
+    #   megadetector
     #   nltk
     #   optuna
     #   pytorch-lightning
+    #   sahi
     #   scmrepo
+    #   yolov5
+traitlets==5.16.1
+    # via
+    #   ipython
+    #   matplotlib-inline
 ttach==0.0.3
     # via grad-cam
 typer==0.25.1
@@ -808,6 +915,7 @@ typing-extensions==4.15.0
     #   datadog-api-client
     #   fastapi
     #   graphene
+    #   grpcio
     #   huggingface-hub
     #   lightning-utilities
     #   litestar
@@ -884,12 +992,15 @@ werkzeug==3.1.8
     # via
     #   flask
     #   flask-cors
+    #   tensorboard
 wrapt==2.2.1
     # via
     #   aiobotocore
     #   ddtrace
 yarl==1.24.2
     # via aiohttp
+yolov5==7.0.10
+    # via megadetector
 zc-lockfile==4.0
     # via dvc
 zipp==4.1.0

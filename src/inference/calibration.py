@@ -72,9 +72,17 @@ DEFAULT_MC_DROPOUT_PASSES = 20
 DEFAULT_CANDIDATE_PERCENTILES = (80, 90, 95, 99)
 
 
-def _val_loader(manifest_path: str, shards_dir: str, batch_size: int = 32) -> tuple[DataLoader, ShardDataset]:
+def _val_loader(
+    manifest_path: str,
+    shards_dir: str,
+    batch_size: int = 32,
+    crop_to_box: bool = False,
+    box_crop_padding: float = 0.15,
+) -> tuple[DataLoader, ShardDataset]:
     manifest = pd.read_csv(manifest_path)
-    val_ds = ShardDataset(manifest, shards_dir=shards_dir, split="val")
+    val_ds = ShardDataset(
+        manifest, shards_dir=shards_dir, split="val", crop_to_box=crop_to_box, box_crop_padding=box_crop_padding
+    )
     if len(val_ds) == 0:
         raise RuntimeError(f"No validation images found in {shards_dir} -- has ingest finished?")
     return DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=0), val_ds
@@ -134,9 +142,15 @@ def fit_temperature(logits: torch.Tensor, labels: torch.Tensor, max_iter: int = 
 
 
 def _collect_val_logits(
-    architecture: str, checkpoint_path: str, manifest_path: str, shards_dir: str, batch_size: int = 32
+    architecture: str,
+    checkpoint_path: str,
+    manifest_path: str,
+    shards_dir: str,
+    batch_size: int = 32,
+    crop_to_box: bool = False,
+    box_crop_padding: float = 0.15,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    loader, _ = _val_loader(manifest_path, shards_dir, batch_size)
+    loader, _ = _val_loader(manifest_path, shards_dir, batch_size, crop_to_box, box_crop_padding)
     device = _resolve_torch_device()
     model = load_checkpoint(checkpoint_path, architecture=architecture, device=device)
 
@@ -155,6 +169,8 @@ def run_temperature_calibration(
     manifest_path: str | None = None,
     shards_dir: str | None = None,
     n_bins: int = 15,
+    crop_to_box: bool = False,
+    box_crop_padding: float = 0.15,
 ) -> dict:
     tag = tag or architecture
     checkpoint_path = checkpoint_path or f"models/checkpoint_{tag}.pt"
@@ -165,7 +181,9 @@ def run_temperature_calibration(
     manifest_path = manifest_path or data_cfg["manifest_path"]
     shards_dir = shards_dir or data_cfg["shards_dir"]
 
-    logits, labels = _collect_val_logits(architecture, checkpoint_path, manifest_path, shards_dir)
+    logits, labels = _collect_val_logits(
+        architecture, checkpoint_path, manifest_path, shards_dir, crop_to_box=crop_to_box, box_crop_padding=box_crop_padding
+    )
     raw_probs = torch.sigmoid(logits).numpy()
     y = labels.numpy()
 
@@ -239,8 +257,10 @@ def _collect_val_uncertainty(
     mc_dropout_passes: int,
     threshold: float,
     batch_size: int = 32,
+    crop_to_box: bool = False,
+    box_crop_padding: float = 0.15,
 ) -> pd.DataFrame:
-    loader, _ = _val_loader(manifest_path, shards_dir, batch_size)
+    loader, _ = _val_loader(manifest_path, shards_dir, batch_size, crop_to_box, box_crop_padding)
     device = _resolve_torch_device()
     model = load_checkpoint(checkpoint_path, architecture=architecture, device=device, dropout_rate=dropout_rate)
 
@@ -276,6 +296,8 @@ def run_uncertainty_analysis(
     threshold: float | None = None,
     mc_dropout_passes: int | None = None,
     batch_size: int = 32,
+    crop_to_box: bool = False,
+    box_crop_padding: float = 0.15,
 ) -> dict:
     tag = tag or architecture
     checkpoint_path = checkpoint_path or f"models/checkpoint_{tag}.pt"
@@ -295,7 +317,16 @@ def run_uncertainty_analysis(
     threshold = threshold if threshold is not None else threshold_cfg["thresholds"]["default"]
 
     df = _collect_val_uncertainty(
-        architecture, checkpoint_path, manifest_path, shards_dir, dropout_rate, mc_dropout_passes, threshold, batch_size
+        architecture,
+        checkpoint_path,
+        manifest_path,
+        shards_dir,
+        dropout_rate,
+        mc_dropout_passes,
+        threshold,
+        batch_size,
+        crop_to_box=crop_to_box,
+        box_crop_padding=box_crop_padding,
     )
     df["is_error"] = (df["true_label"] != df["pred_label"]).astype(int)
     df.to_csv(out_dir / "uncertainty_scores.csv", index=False)

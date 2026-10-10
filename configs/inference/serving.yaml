@@ -4,13 +4,49 @@
 # experiment or the ResNet-50 baseline) to change what's served -- no code
 # change needed.
 serving:
-  tag: efficientnet_b3
+  tag: efficientnet_b3_boxcrop_retrained
   architecture: efficientnet_b3
-  checkpoint_path: models/checkpoint_efficientnet_b3.pt
+  checkpoint_path: models/checkpoint_efficientnet_b3_boxcrop_retrained.pt
   model_config_path: configs/model/efficientnet_b3.yaml   # sources dropout_rate + mc_dropout_passes
+
+  # This checkpoint was trained mostly on box-cropped images (crop_to_box=True,
+  # see boxcrop_experiment.py). predict_one() now runs a live MegaDetector
+  # detection (src/inference/megadetector.py) on every upload and classifies
+  # the crop when it finds a confident animal box -- matching the training
+  # distribution instead of the full-frame mismatch this comment used to
+  # describe. Falls back to the full, uncropped frame exactly when
+  # MegaDetector finds nothing confident, same as training's own has_box
+  # fallback. The returned heatmap always shows the full original photo
+  # either way (compute_and_save_full_frame_boxcrop_heatmap remaps a crop's
+  # attention back onto it) -- a user should never see a zoomed-in snippet
+  # instead of the photo they uploaded.
 
   # Where /predict's optional Grad-CAM heatmaps and the local per-prediction
   # log get written. Config-driven (rather than hardcoded in predict.py) so
   # tests can point these at a tmp_path instead of the real repo tree.
   heatmap_dir: data/predictions/heatmaps
   prediction_log_path: data/predictions/serving_log.csv
+
+  # Confidence threshold for accepting a MegaDetector box, and the padding
+  # added around it before cropping -- mirrors configs/data/default.yaml's
+  # md_conf_threshold/box_crop_padding (the same values training-time
+  # box-cropping used), duplicated here rather than imported so serving.yaml
+  # stays self-contained.
+  md_conf_threshold: 0.2
+  box_crop_padding: 0.15
+
+  # Temperature-scaling calibration factor (see src/inference/calibration.py,
+  # metrics/efficientnet_b3_boxcrop_retrained/calibration/temperature.json).
+  # Applied ONLY to the confidence value shown to a user (sigmoid(logit/T)) --
+  # the predicted LABEL still uses the raw, uncalibrated probability, because
+  # the decision thresholds below were themselves calibrated against raw
+  # probabilities. Re-fit after live MegaDetector cropping went in above,
+  # against this checkpoint's own VALIDATION predictions run through
+  # ShardDataset(crop_to_box=True) -- i.e. the actual cropped-input
+  # distribution predict_one() now serves, not the full-frame one this
+  # checkpoint was previously (mistakenly) evaluated against. Needed far
+  # less correction than the old full-frame fit (T=6.32, ECE 0.14 -> 0.037):
+  # on cropped input this checkpoint is already fairly well calibrated raw
+  # (ECE 0.012 before any scaling), which tracks -- box-cropped input is
+  # what most of its training data actually looked like.
+  temperature: 2.843111038208008

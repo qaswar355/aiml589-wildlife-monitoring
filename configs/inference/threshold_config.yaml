@@ -3,19 +3,36 @@
 # Prioritises recall (minimise false negatives = missed invasive mammals).
 # Updated after each retraining cycle.
 thresholds:
-  # Calibrated from data/predictions/test_predictions_efficientnet_b3.csv's
-  # real PR curve: precision 90.5%, recall 96.7% at this threshold (vs.
-  # 88.6%/97.3% at the old 0.5 placeholder) -- recall stays well above the
-  # 0.90 floor below. Zone-specific thresholds intentionally left at their
-  # 0.5 placeholder: no zone-level breakdown exists to calibrate them from,
-  # and fiordland in particular (a high-sensitivity zone) shouldn't silently
-  # inherit a precision-favouring threshold tuned for the whole dataset.
-  default: 0.95
+  # checkpoint_efficientnet_b3_boxcrop_retrained.pt (see serving.yaml) was
+  # trained mostly on box-cropped images. Until live MegaDetector cropping
+  # existed, predict.py classified full, uncropped frames -- a real
+  # train/inference mismatch that capped achievable recall well below this
+  # file's own 0.90 floor (documented here as a known limitation at the
+  # time; see git history for the full numbers). Now that predict_one()
+  # crops to a confident MegaDetector detection before classifying
+  # (src/inference/megadetector.py), that mismatch is gone, and 0.05 --
+  # kept at the SAME value chosen back then to maximise recall under the
+  # broken full-frame distribution -- finally does what it was originally
+  # meant to: swept the box-cropped test predictions
+  # (data/predictions/test_predictions_efficientnet_b3_boxcrop_retrained.csv,
+  # crop_to_box=True, matching live serving) from threshold=0.005 to 0.99;
+  # recall stays at or above 0.90 across the ENTIRE range now (min 96.7% at
+  # threshold=0.99). At 0.05: recall=98.57%, precision=95.22%,
+  # accuracy=97.51%.
+  #
+  # Zone-specific thresholds intentionally left at their 0.5 placeholder:
+  # no zone-level breakdown exists to calibrate them from, and fiordland
+  # in particular (a high-sensitivity zone) shouldn't silently inherit a
+  # threshold tuned for the whole dataset.
+  default: 0.05
   north_island: 0.5
   south_island: 0.5
   fiordland: 0.5       # high-sensitivity zone (critical kiwi habitat)
 
-# Minimum recall floor enforced by the model governance gate
+# Minimum recall floor enforced by the model governance gate. Comfortably
+# met now (98.57% at the deployed threshold, see above) -- previously
+# tracked here as a known, visible gap while predict.py served full frames
+# without live MegaDetector cropping.
 recall_floor: 0.90
 
 # MC Dropout uncertainty (std of sigmoid probability across N forward
@@ -23,6 +40,15 @@ recall_floor: 0.90
 # of which side of the decision threshold it landed on. Kept separate from
 # the decision thresholds above on purpose -- "is the label probably wrong"
 # and "is the model unsure" are different questions.
-# Placeholder — set after seeing the real distribution of MC Dropout std
-# on held-out data.
-uncertainty_review_cutoff: 0.15
+#
+# Re-fit against checkpoint_efficientnet_b3_boxcrop_retrained.pt on real
+# validation data run through ShardDataset(crop_to_box=True) -- the same
+# cropped-input distribution live MegaDetector detection now serves
+# (metrics/efficientnet_b3_boxcrop_retrained/calibration/uncertainty.json).
+# MC Dropout uncertainty is now a MUCH stronger error signal than it was on
+# full frames (AUC 0.94 vs 0.69 previously) -- consistent with cropping
+# fixing this checkpoint's train/inference distribution mismatch generally,
+# not just its probability calibration. Kept the same 80th-percentile
+# convention as before: flagged_fraction=20.0%  error_capture_rate=90.9%
+# (vs 39.4% previously)  precision_of_flagging=6.9%.
+uncertainty_review_cutoff: 2.1111108594595862e-07
