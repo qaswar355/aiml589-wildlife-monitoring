@@ -31,6 +31,21 @@ pydantic
 python-multipart
 sentry-sdk[fastapi]
 
+# ── Live object detection (crop to the animal before classifying) ─────────────
+# Same MegaDetector generation (v5a) already used to produce this project's
+# training-time boxes (data/md_boxes.parquet, via src/eda/eda02_box.py).
+# Pinned to 5.0.3 deliberately: megadetector>=5.0.26 switches its YOLOv5
+# backend to the legacy `ultralytics-yolov5==0.1.1` shim, which hard-pins
+# protobuf<=3.20.1 -- unsatisfiable together with tensorboard>=6.31.1 (already
+# required here). 5.0.3 depends on the actively-maintained `yolov5` package
+# instead, which has no such pin, so it resolves cleanly alongside the rest
+# of this project's stack. Tradeoff: 5.0.3 installs its submodules
+# (detection, api, classification, data_management, md_utils,
+# md_visualization, taxonomy_mapping) as bare top-level packages rather than
+# namespaced under `megadetector.` -- verified these don't collide with
+# anything else in this project or its dependencies.
+megadetector==5.0.3
+
 # ── Review dashboard (Streamlit frontend) ─────────────────────────────────────
 streamlit
 plotly

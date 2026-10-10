@@ -1,6 +1,12 @@
 """End-to-end smoke test of the /predict route: a tiny untrained model, a
 real tiny JPEG, and create_app() pointed entirely at tmp_path configs so
-this never touches the real models/ or configs/ directories."""
+this never touches the real models/ or configs/ directories.
+
+load_megadetector is monkeypatched in every test here -- the real one
+downloads/loads a ~280MB pretrained detector, which would make this
+"hermetic" suite silently network- and disk-state-dependent (only passing
+because a real weights file happens to already be cached locally) instead
+of fast and reproducible on a clean checkout."""
 from pathlib import Path
 
 import pandas as pd
@@ -11,6 +17,18 @@ from PIL import Image
 
 from src.inference.app import create_app
 from src.models.classifier import WildlifeClassifier
+
+
+class _FakeDetector:
+    """Stands in for a loaded MegaDetector PTDetector. `detections` is a
+    list of canned detection dicts returned regardless of the input image
+    -- these tests check response wiring, not real detection accuracy."""
+
+    def __init__(self, detections=None):
+        self._detections = detections or []
+
+    def generate_detections_one_image(self, image, image_id, detection_threshold):
+        return {"file": image_id, "detections": self._detections}
 
 
 def _build_fake_serving_setup(tmp_path):
@@ -68,7 +86,8 @@ def _build_fake_serving_setup(tmp_path):
     return serving_config_path, threshold_config_path, image_path, heatmap_dir, prediction_log_path
 
 
-def test_predict_endpoint_returns_prediction(tmp_path):
+def test_predict_endpoint_returns_prediction(tmp_path, monkeypatch):
+    monkeypatch.setattr("src.inference.predict.load_megadetector", lambda: _FakeDetector())
     serving_cfg, threshold_cfg, image_path, _heatmap_dir, log_path = _build_fake_serving_setup(tmp_path)
     app = create_app(serving_config_path=str(serving_cfg), threshold_config_path=str(threshold_cfg))
 
@@ -100,7 +119,8 @@ def test_predict_endpoint_returns_prediction(tmp_path):
     assert log_df.iloc[0]["label"] == pred["label"]
 
 
-def test_predict_endpoint_with_heatmap_returns_a_real_file(tmp_path):
+def test_predict_endpoint_with_heatmap_returns_a_real_file(tmp_path, monkeypatch):
+    monkeypatch.setattr("src.inference.predict.load_megadetector", lambda: _FakeDetector())
     serving_cfg, threshold_cfg, image_path, _heatmap_dir, _log_path = _build_fake_serving_setup(tmp_path)
     app = create_app(serving_config_path=str(serving_cfg), threshold_config_path=str(threshold_cfg))
 
@@ -116,7 +136,37 @@ def test_predict_endpoint_with_heatmap_returns_a_real_file(tmp_path):
     assert Path(heatmap_path).exists()
 
 
-def test_predict_endpoint_rejects_empty_images_list(tmp_path):
+def test_predict_endpoint_crops_to_confident_detection_before_classifying(tmp_path, monkeypatch):
+    """When MegaDetector reports a confident animal box, predict_one()
+    should classify the crop (not the full frame) and still return a
+    heatmap remapped onto the full original photo -- the actual behaviour
+    Task 13 adds on top of the always-full-frame path the other tests
+    here exercise."""
+    monkeypatch.setattr(
+        "src.inference.predict.load_megadetector",
+        lambda: _FakeDetector([{"category": "1", "conf": 0.9, "bbox": [0.2, 0.2, 0.3, 0.3]}]),
+    )
+    serving_cfg, threshold_cfg, image_path, _heatmap_dir, log_path = _build_fake_serving_setup(tmp_path)
+    app = create_app(serving_config_path=str(serving_cfg), threshold_config_path=str(threshold_cfg))
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/predict",
+            json={"images": [{"image_path": str(image_path)}], "return_heatmaps": True},
+        )
+
+    assert response.status_code == 200
+    pred = response.json()["predictions"][0]
+    heatmap_path = pred["heatmap_path"]
+    assert heatmap_path is not None
+    assert Path(heatmap_path).exists()
+
+    log_df = pd.read_csv(log_path)
+    assert len(log_df) == 1
+
+
+def test_predict_endpoint_rejects_empty_images_list(tmp_path, monkeypatch):
+    monkeypatch.setattr("src.inference.predict.load_megadetector", lambda: _FakeDetector())
     serving_cfg, threshold_cfg, _image_path, _heatmap_dir, _log_path = _build_fake_serving_setup(tmp_path)
     app = create_app(serving_config_path=str(serving_cfg), threshold_config_path=str(threshold_cfg))
 
@@ -126,7 +176,8 @@ def test_predict_endpoint_rejects_empty_images_list(tmp_path):
     assert response.status_code == 422
 
 
-def test_model_info_endpoint(tmp_path):
+def test_model_info_endpoint(tmp_path, monkeypatch):
+    monkeypatch.setattr("src.inference.predict.load_megadetector", lambda: _FakeDetector())
     serving_cfg, threshold_cfg, _image_path, _heatmap_dir, _log_path = _build_fake_serving_setup(tmp_path)
     app = create_app(serving_config_path=str(serving_cfg), threshold_config_path=str(threshold_cfg))
 

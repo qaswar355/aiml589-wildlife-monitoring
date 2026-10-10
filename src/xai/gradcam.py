@@ -193,6 +193,39 @@ def compute_and_save_boxcrop_heatmap(
     return compute_and_save_heatmap(cam_builder, cropped, out_path, title)
 
 
+def compute_and_save_full_frame_boxcrop_heatmap(
+    cam_builder: GradCAMPlusPlus,
+    image: Image.Image,
+    bbox: list[float],
+    padding: float,
+    out_path: Path,
+    title: str,
+    canvas_size: int = 300,
+) -> Path:
+    """Saves a heatmap overlay on the FULL original frame, with attention
+    computed on the box-crop the classifier actually saw and remapped back
+    to its true location (via compute_boxcrop_cam) -- unlike
+    compute_and_save_boxcrop_heatmap, which shows only the crop itself.
+    For live /predict responses: a user uploads one full photo and should
+    see attention on that same photo, not a zoomed-in snippet, even though
+    the classifier underneath only looked at the cropped animal. No
+    separate fallback branch for a missing/invalid bbox is needed here --
+    compute_boxcrop_cam already computes that fallback CAM directly on the
+    full image in that case, matching training's own fallback."""
+    canvas_cam = compute_boxcrop_cam(cam_builder, image, bbox, padding, canvas_size)
+    display_image = np.asarray(image.resize((canvas_size, canvas_size)), dtype=np.float32) / 255.0
+    overlay = show_cam_on_image(display_image, canvas_cam, use_rgb=True)
+
+    fig, ax = plt.subplots(figsize=(4, 4))
+    ax.imshow(overlay)
+    ax.set_title(title, fontsize=9)
+    ax.axis("off")
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=120)
+    plt.close(fig)
+    return out_path
+
+
 def _load_false_positives(
     tag: str, manifest: pd.DataFrame, predictions_path: str | None = None
 ) -> pd.DataFrame:

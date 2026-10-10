@@ -45,6 +45,7 @@ import tempfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 import mlflow
 import pandas as pd
@@ -53,11 +54,16 @@ import torch.nn as nn
 from PIL import Image
 from pytorch_grad_cam import GradCAMPlusPlus
 
+from src.inference.megadetector import detect_animal_box, load_megadetector
 from src.inference.schemas import ImageItem, PredictRequest, PredictResponse, PredictionResult
 from src.models.classifier import WildlifeClassifier, load_checkpoint
-from src.training.dataset import DEFAULT_TRANSFORM
+from src.training.dataset import DEFAULT_TRANSFORM, crop_bounds_from_bbox
 from src.training.evaluate import _load_yaml, _resolve_torch_device
-from src.xai.gradcam import TARGET_LAYER_BY_ARCHITECTURE, compute_and_save_heatmap
+from src.xai.gradcam import (
+    TARGET_LAYER_BY_ARCHITECTURE,
+    compute_and_save_full_frame_boxcrop_heatmap,
+    compute_and_save_heatmap,
+)
 
 DEFAULT_SERVING_CONFIG = "configs/inference/serving.yaml"
 DEFAULT_THRESHOLD_CONFIG = "configs/inference/threshold_config.yaml"
@@ -80,6 +86,10 @@ class ServingContext:
     target_layer: nn.Module
     heatmap_dir: str
     prediction_log_path: str
+    temperature: float
+    detector: Any
+    md_conf_threshold: float
+    box_crop_padding: float
 
 
 def build_serving_context(
@@ -101,6 +111,13 @@ def build_serving_context(
     target_layer = TARGET_LAYER_BY_ARCHITECTURE[serving_cfg["architecture"]](model)
     cam_builder = GradCAMPlusPlus(model=model, target_layers=[target_layer])
 
+    # Loaded once here, like the classifier checkpoint above -- not per
+    # request. See src.inference.megadetector for why this crops before
+    # classifying: this checkpoint was trained mostly on MegaDetector-
+    # cropped images (crop_to_box=True), so classifying the full frame is a
+    # distribution mismatch predict_one() below now closes.
+    detector = load_megadetector()
+
     return ServingContext(
         model=model,
         device=device,
@@ -114,6 +131,13 @@ def build_serving_context(
         target_layer=target_layer,
         heatmap_dir=serving_cfg.get("heatmap_dir", "data/predictions/heatmaps"),
         prediction_log_path=serving_cfg.get("prediction_log_path", "data/predictions/serving_log.csv"),
+        temperature=float(serving_cfg.get("temperature", 1.0)),
+        detector=detector,
+        # Mirrors configs/data/default.yaml's md_conf_threshold/box_crop_padding
+        # (the same values training-time box-cropping used) so live detection
+        # stays consistent with how the served checkpoint was trained.
+        md_conf_threshold=float(serving_cfg.get("md_conf_threshold", 0.2)),
+        box_crop_padding=float(serving_cfg.get("box_crop_padding", 0.15)),
     )
 
 
@@ -140,14 +164,43 @@ def predict_one(
     return_heatmap: bool = False,
 ) -> PredictionResult:
     image = Image.open(image_path).convert("RGB")
-    input_tensor = DEFAULT_TRANSFORM(image).unsqueeze(0).to(ctx.device)
 
-    # Deterministic pass (dropout off) decides the label -- this is the
-    # exact computation evaluate.py's reported metrics are measured
-    # against, so the live label always agrees with what those numbers
-    # mean.
-    deterministic_prob, _ = ctx.model.predict_proba(input_tensor, mc_dropout_passes=1)
-    probability = float(deterministic_prob.item())
+    # Crop to the animal before classifying, matching how this checkpoint
+    # was mostly trained (crop_to_box=True) -- but only when MegaDetector
+    # found something it's confident about; otherwise classify the full
+    # frame, exactly like training's own has_box fallback (crop_to_bbox).
+    bbox = detect_animal_box(ctx.detector, image, conf_threshold=ctx.md_conf_threshold)
+    classify_image = image
+    if bbox is not None:
+        bounds = crop_bounds_from_bbox(bbox, ctx.box_crop_padding)
+        if bounds is not None:
+            x0, y0, x1, y1 = bounds
+            img_w, img_h = image.size
+            left, top = int(x0 * img_w), int(y0 * img_h)
+            right, bottom = int(x1 * img_w), int(y1 * img_h)
+            if right > left and bottom > top:
+                classify_image = image.crop((left, top, right, bottom))
+
+    input_tensor = DEFAULT_TRANSFORM(classify_image).unsqueeze(0).to(ctx.device)
+
+    # Deterministic forward pass (dropout off, ctx.model is already in eval
+    # mode permanently from load_checkpoint) -- the raw LOGIT, not routed
+    # through predict_proba, since that method already applies sigmoid and
+    # returns a probability. Recovering a logit from an already-sigmoid'd
+    # probability via the inverse sigmoid would blow up numerically at the
+    # saturated (~1.0) probabilities this model produces on a large
+    # fraction of real inputs. This raw-probability computation is the
+    # exact one evaluate.py's reported metrics are measured against, so the
+    # label always agrees with what those numbers mean.
+    with torch.no_grad():
+        logit = ctx.model(input_tensor)
+    probability = float(torch.sigmoid(logit).item())
+
+    # Temperature-scaled confidence for DISPLAY only -- see serving.yaml's
+    # own comment for why the label decision above/below must keep using
+    # the raw probability (the deployed thresholds were themselves
+    # calibrated against raw probabilities, not calibrated ones).
+    calibrated_probability = float(torch.sigmoid(logit / ctx.temperature).item())
 
     # A separate MC Dropout pass estimates epistemic uncertainty only; its
     # mean is discarded on purpose -- see the module docstring for why it
@@ -157,11 +210,14 @@ def predict_one(
 
     label = 1 if probability >= threshold else 0
     # confidence in the predicted label, not raw P(mammal) -- matches
-    # evaluate.py's convention exactly (see its docstring) so a bird
-    # prediction with probability=0.004 reports confidence=0.996, not
-    # 0.004, which would read as "barely thinks it's a bird" when it's
-    # actually the opposite.
-    confidence = max(probability, 1 - probability)
+    # evaluate.py's convention (see its docstring) so a bird prediction
+    # with probability=0.004 reports confidence=0.996, not 0.004, which
+    # would read as "barely thinks it's a bird" when it's actually the
+    # opposite. Computed from the CALIBRATED probability so what a user
+    # sees is an honestly-scaled confidence, not the raw, overconfident one
+    # -- this checkpoint's raw confidence measured an ECE of 0.14 before
+    # calibration (see calibration.py / metrics/<tag>/calibration/).
+    confidence = max(calibrated_probability, 1 - calibrated_probability)
     requires_review = _needs_review(uncertainty, ctx.threshold_cfg["uncertainty_review_cutoff"])
 
     heatmap_path: str | None = None
@@ -169,7 +225,19 @@ def predict_one(
         Path(ctx.heatmap_dir).mkdir(parents=True, exist_ok=True)
         out_path = Path(ctx.heatmap_dir) / f"{Path(image_path).stem}_heatmap.png"
         title = f"{Path(image_path).name} -> {'mammal' if label else 'bird'} (p={probability:.2f})"
-        heatmap_path = str(compute_and_save_heatmap(ctx.cam_builder, image, out_path, title))
+        # Always shown on the FULL original photo the user uploaded, even
+        # when the classifier above only looked at a crop -- a user should
+        # never see a zoomed-in snippet instead of the photo they submitted.
+        # compute_and_save_full_frame_boxcrop_heatmap remaps the crop's
+        # attention back to its true location on the full frame.
+        if bbox is not None:
+            heatmap_path = str(
+                compute_and_save_full_frame_boxcrop_heatmap(
+                    ctx.cam_builder, image, bbox, ctx.box_crop_padding, out_path, title
+                )
+            )
+        else:
+            heatmap_path = str(compute_and_save_heatmap(ctx.cam_builder, image, out_path, title))
 
     return PredictionResult(
         image_path=image_path,
