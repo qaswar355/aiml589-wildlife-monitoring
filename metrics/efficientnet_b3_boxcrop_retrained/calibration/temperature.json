@@ -1,0 +1,9 @@
+{
+  "tag": "efficientnet_b3_boxcrop_retrained",
+  "n_val_images": 8012,
+  "temperature": 2.843111038208008,
+  "nll_before": 0.09827900677919388,
+  "nll_after": 0.04738626256585121,
+  "ece_before": 0.012376181911481793,
+  "ece_after": 0.0030229944797140955
+}

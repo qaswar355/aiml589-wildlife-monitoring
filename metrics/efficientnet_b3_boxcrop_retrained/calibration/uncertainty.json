@@ -1,0 +1,41 @@
+{
+  "tag": "efficientnet_b3_boxcrop_retrained",
+  "n_val_images": 8012,
+  "n_errors": 121,
+  "error_rate": 0.01510234648027958,
+  "mc_dropout_passes": 20,
+  "threshold_used": 0.05,
+  "uncertainty_vs_error_auc": 0.939999643908585,
+  "mean_uncertainty_correct": 0.00024208499235101044,
+  "mean_uncertainty_incorrect": 0.009955119341611862,
+  "candidate_cutoffs": [
+    {
+      "percentile": 80,
+      "cutoff": 2.1111108594595862e-07,
+      "flagged_fraction": 0.20007488766849726,
+      "error_capture_rate": 0.9090909090909091,
+      "precision_of_flagging": 0.06862133499688085
+    },
+    {
+      "percentile": 90,
+      "cutoff": 2.6610427994455677e-06,
+      "flagged_fraction": 0.100099850224663,
+      "error_capture_rate": 0.8429752066115702,
+      "precision_of_flagging": 0.12718204488778054
+    },
+    {
+      "percentile": 95,
+      "cutoff": 5.193726246943697e-05,
+      "flagged_fraction": 0.0500499251123315,
+      "error_capture_rate": 0.7272727272727273,
+      "precision_of_flagging": 0.2194513715710723
+    },
+    {
+      "percentile": 99,
+      "cutoff": 0.012639553286135197,
+      "flagged_fraction": 0.010109835247129306,
+      "error_capture_rate": 0.2727272727272727,
+      "precision_of_flagging": 0.4074074074074074
+    }
+  ]
+}
