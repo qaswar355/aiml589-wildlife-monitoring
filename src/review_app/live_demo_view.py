@@ -26,6 +26,8 @@ from pathlib import Path
 import requests
 import streamlit as st
 
+from src.review_app.theme import status_badge
+
 API_BASE_URL = os.environ.get("API_BASE_URL", "http://localhost:8000")
 
 
@@ -61,15 +63,16 @@ def render_live_demo_view() -> None:
         result = response.json()["predictions"][0]
 
     label_text = "Mammal (invasive)" if result["label"] == 1 else "Bird (native)"
-    st.subheader(label_text)
-    col1, col2 = st.columns(2)
-    col1.metric("Confidence", f"{result['confidence']:.2%}")
-    col2.metric("Uncertainty (MC Dropout std)", f"{result['uncertainty']:.3f}")
+    with st.container(border=True):
+        st.subheader(label_text)
+        col1, col2 = st.columns(2)
+        col1.metric("Confidence", f"{result['confidence']:.2%}")
+        col2.metric("Uncertainty (MC Dropout std)", f"{result['uncertainty']:.3f}")
 
-    if result["requires_review"]:
-        st.warning("Flagged for human review (uncertainty above cutoff).")
-    else:
-        st.success("Not flagged for review.")
+        if result["requires_review"]:
+            status_badge("warning", "Flagged for human review")
+        else:
+            status_badge("good", "Not flagged for review")
 
     if result.get("heatmap_path"):
         st.image(result["heatmap_path"], caption="Grad-CAM++ heatmap")
