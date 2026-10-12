@@ -40,7 +40,13 @@ from src.review_app.theme import status_badge
 METRICS_DIR = Path("metrics")
 SERVING_CONFIG_PATH = Path("configs/inference/serving.yaml")
 THRESHOLD_CONFIG_PATH = Path("configs/inference/threshold_config.yaml")
-DRIFT_REPORT_PATH = METRICS_DIR / "drift" / "efficientnet_b3_vs_external" / "report.json"
+# The deployed model is a box-crop model, so its drift check uses MegaDetector-cropped
+# external images (src/external_data/evaluate_external_cropped.py), matching how it is served.
+DRIFT_REPORT_PATH = METRICS_DIR / "drift" / "efficientnet_b3_boxcrop_cropped_vs_external" / "report.json"
+DEFAULT_RETRAIN_RATIONALE = (
+    "concept drift is the deciding signal (labelled correctness actually degraded beyond tolerance); "
+    "confidence drift and XAI-centroid drift are corroborating context."
+)
 FULLFRAME_PREDICTIONS_PATH = Path("data/predictions/test_predictions_efficientnet_b3_boxcrop_retrained_fullframe.csv")
 
 MODEL_COMPARISON_TAGS = [
@@ -53,7 +59,7 @@ MODEL_COMPARISON_TAGS = [
 ]
 
 MODEL_LABELS = {
-    "efficientnet_b3": "EfficientNet-B3 (baseline)",
+    "efficientnet_b3": "EfficientNet-B3 (standard model)",
     "resnet50": "ResNet-50",
     "efficientnet_b3_boxcrop": "EfficientNet-B3 + box-crop",
     "efficientnet_b3_seasonal": "EfficientNet-B3, seasonal split",
@@ -209,7 +215,7 @@ def render_researcher_view() -> None:
                 st.caption(f"x p={xd['x_axis']['p_value']:.4f}  y p={xd['y_axis']['p_value']:.4f}")
 
         st.markdown(
-            f"**Retrain recommended: {'Yes' if drift['retrain_recommended'] else 'No'}** — {drift['retrain_rationale']}"
+            f"**Retrain recommended: {'Yes' if drift['retrain_recommended'] else 'No'}** — {drift.get('retrain_rationale', DEFAULT_RETRAIN_RATIONALE)}"
         )
 
     st.divider()
