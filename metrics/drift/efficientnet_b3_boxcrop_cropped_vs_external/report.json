@@ -1,0 +1,63 @@
+{
+  "tag": "efficientnet_b3_boxcrop_cropped_vs_external",
+  "model": "efficientnet_b3_boxcrop",
+  "external_input": "MegaDetector-cropped (conf 0.2, padding 0.15), full frame when no box",
+  "confidence_drift": {
+    "drift_score": 1.0168559352600484,
+    "method": "wasserstein_normed",
+    "threshold": 0.1,
+    "drifted": true
+  },
+  "concept_drift": {
+    "threshold_used": 0.5,
+    "baseline_metrics": {
+      "accuracy": 0.9814962196577796,
+      "precision": 0.9739644970414201,
+      "recall": 0.9787631668365613,
+      "f1": 0.9763579357681552
+    },
+    "current_metrics": {
+      "accuracy": 0.8134048257372655,
+      "precision": 0.9013490725126475,
+      "recall": 0.8223076923076923,
+      "f1": 0.8600160901045857
+    },
+    "deltas": {
+      "accuracy": -0.1680913939205141,
+      "precision": -0.07261542452877257,
+      "recall": -0.156455474528869,
+      "f1": -0.11634184566356953
+    },
+    "score_distribution_shift": {
+      "mammal": {
+        "statistic": 0.6021341383726705,
+        "p_value": 3.636e-321,
+        "n_baseline": 5886,
+        "n_current": 1300
+      },
+      "bird": {
+        "statistic": 0.4487969531027365,
+        "p_value": 4.703491082355452e-98,
+        "n_baseline": 9192,
+        "n_current": 565
+      }
+    },
+    "metric_drop_tolerance": 0.03,
+    "drifted": true
+  },
+  "xai_centroid_drift": {
+    "n_baseline": 100,
+    "n_current": 100,
+    "x_axis": {
+      "statistic": 0.15,
+      "p_value": 0.21117008625127576
+    },
+    "y_axis": {
+      "statistic": 0.14,
+      "p_value": 0.2819416298082479
+    },
+    "alpha": 0.05,
+    "drifted": false
+  },
+  "retrain_recommended": true
+}
