@@ -113,3 +113,53 @@ def test_outcome_definitions_partition_the_whole_dataframe():
     masks = [mask_fn(df) for mask_fn in OUTCOME_DEFINITIONS.values()]
     coverage = sum(m.astype(int) for m in masks)
     assert coverage.tolist() == [1, 1, 1, 1]
+
+
+# -- Which output the heatmap explains ---------------------------------------
+
+from PIL import Image  # noqa: E402
+
+from src.xai.gradcam import cam_target_for_row, compute_boxcrop_cam  # noqa: E402
+
+
+def test_cam_target_mammal_mode_always_explains_mammal():
+    assert cam_target_for_row(0, "mammal") == 1
+    assert cam_target_for_row(1, "mammal") == 1
+
+
+def test_cam_target_predicted_mode_follows_the_prediction():
+    assert cam_target_for_row(0, "predicted") == 0  # predicted bird -> explain bird
+    assert cam_target_for_row(1, "predicted") == 1
+
+
+def test_cam_target_rejects_unknown_mode():
+    with pytest.raises(ValueError, match="cam_target"):
+        cam_target_for_row(1, "bird")
+
+
+class _RecordingCam:
+    """Stands in for GradCAMPlusPlus: records the targets it is asked to
+    explain and returns a flat heatmap, so no model is needed."""
+
+    device = "cpu"
+
+    def __init__(self):
+        self.categories = []
+
+    def __call__(self, input_tensor, targets):
+        self.categories.append(targets[0].category)
+        return np.ones((1, 300, 300), dtype=np.float32)
+
+
+@pytest.mark.parametrize("target", [0, 1])
+def test_compute_boxcrop_cam_passes_the_target_through(target):
+    cam = _RecordingCam()
+    image = Image.new("RGB", (100, 100))
+    compute_boxcrop_cam(cam, image, [0.2, 0.2, 0.4, 0.4], padding=0.0, target=target)
+    assert cam.categories == [target]
+
+
+def test_compute_boxcrop_cam_defaults_to_mammal():
+    cam = _RecordingCam()
+    compute_boxcrop_cam(cam, Image.new("RGB", (100, 100)), [0.2, 0.2, 0.4, 0.4], padding=0.0)
+    assert cam.categories == [1]
