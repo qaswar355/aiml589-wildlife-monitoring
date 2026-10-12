@@ -1,0 +1,25 @@
+{
+  "tag": "efficientnet_b3",
+  "cam_target": "predicted_class",
+  "crop_to_box": false,
+  "bird_correct": {
+    "n_scored": 8444,
+    "pointing_game_mean": 0.35679886057503624,
+    "pointing_game_median": 0.3218587636947632
+  },
+  "mammal_correct": {
+    "n_scored": 5727,
+    "pointing_game_mean": 0.6670491956845594,
+    "pointing_game_median": 0.7331748008728027
+  },
+  "false_positive": {
+    "n_scored": 735,
+    "pointing_game_mean": 0.13631814935717934,
+    "pointing_game_median": 0.03009207174181938
+  },
+  "false_negative": {
+    "n_scored": 159,
+    "pointing_game_mean": 0.21060298667165878,
+    "pointing_game_median": 0.11700627952814102
+  }
+}
