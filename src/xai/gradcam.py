@@ -78,6 +78,7 @@ def compute_and_save_heatmap(
     image: Image.Image,
     out_path: Path,
     title: str,
+    target: int = 1,
 ) -> Path:
     """Runs Grad-CAM++ over `image` and saves the image+heatmap overlay to
     `out_path`. Shared by the batch false-positive analysis below and by
@@ -89,7 +90,7 @@ def compute_and_save_heatmap(
     `.device` from the wrapped model's own parameters).
     """
     input_tensor = DEFAULT_TRANSFORM(image).unsqueeze(0).to(cam_builder.device)
-    grayscale_cam = cam_builder(input_tensor=input_tensor, targets=[BinaryClassifierOutputTarget(1)])[0]
+    grayscale_cam = cam_builder(input_tensor=input_tensor, targets=[BinaryClassifierOutputTarget(target)])[0]
 
     display_image = np.asarray(image.resize((300, 300)), dtype=np.float32) / 255.0
     overlay = show_cam_on_image(display_image, grayscale_cam, use_rgb=True)
@@ -130,6 +131,7 @@ def compute_boxcrop_cam(
     bbox: list[float],
     padding: float,
     canvas_size: int = 300,
+    target: int = 1,
 ) -> np.ndarray:
     """Runs Grad-CAM++ on `image` cropped to its MegaDetector box the same
     way training did (crop_bounds_from_bbox), then places the resulting
@@ -150,7 +152,7 @@ def compute_boxcrop_cam(
     bounds = crop_bounds_from_bbox(bbox, padding)
     if bounds is None:
         input_tensor = DEFAULT_TRANSFORM(image).unsqueeze(0).to(cam_builder.device)
-        return cam_builder(input_tensor=input_tensor, targets=[BinaryClassifierOutputTarget(1)])[0]
+        return cam_builder(input_tensor=input_tensor, targets=[BinaryClassifierOutputTarget(target)])[0]
 
     x0, y0, x1, y1 = bounds
     img_w, img_h = image.size
@@ -159,7 +161,7 @@ def compute_boxcrop_cam(
     cropped = image.crop((left, top, right, bottom))
 
     input_tensor = DEFAULT_TRANSFORM(cropped).unsqueeze(0).to(cam_builder.device)
-    crop_cam = cam_builder(input_tensor=input_tensor, targets=[BinaryClassifierOutputTarget(1)])[0]
+    crop_cam = cam_builder(input_tensor=input_tensor, targets=[BinaryClassifierOutputTarget(target)])[0]
 
     cx0, cy0 = int(x0 * canvas_size), int(y0 * canvas_size)
     cx1, cy1 = int(x1 * canvas_size), int(y1 * canvas_size)
@@ -176,6 +178,7 @@ def compute_and_save_boxcrop_heatmap(
     padding: float,
     out_path: Path,
     title: str,
+    target: int = 1,
 ) -> Path:
     """Saves a heatmap overlay on the crop the box-crop model actually saw
     (rather than the full frame, which would mostly show black padding
@@ -184,13 +187,29 @@ def compute_and_save_boxcrop_heatmap(
     trustworthy box, matching training's own fallback."""
     bounds = crop_bounds_from_bbox(bbox, padding)
     if bounds is None:
-        return compute_and_save_heatmap(cam_builder, image, out_path, title)
+        return compute_and_save_heatmap(cam_builder, image, out_path, title, target)
     x0, y0, x1, y1 = bounds
     img_w, img_h = image.size
     left, top = int(x0 * img_w), int(y0 * img_h)
     right, bottom = int(x1 * img_w), int(y1 * img_h)
     cropped = image.crop((left, top, right, bottom))
-    return compute_and_save_heatmap(cam_builder, cropped, out_path, title)
+    return compute_and_save_heatmap(cam_builder, cropped, out_path, title, target)
+
+
+CAM_TARGETS = ("mammal", "predicted")
+
+
+def cam_target_for_row(pred_label: int, cam_target: str) -> int:
+    """Which output Grad-CAM++ explains for one image. "mammal" always
+    explains the mammal output (the original audit). "predicted" explains
+    the class the model actually predicted -- for an image called a bird,
+    the mammal output only shows what argues *against* bird, so it is the
+    wrong question for correctly classified birds."""
+    if cam_target == "mammal":
+        return 1
+    if cam_target == "predicted":
+        return int(pred_label)
+    raise ValueError(f"cam_target must be one of {CAM_TARGETS}, got {cam_target!r}")
 
 
 def compute_and_save_full_frame_boxcrop_heatmap(
@@ -389,6 +408,7 @@ def run_attention_audit(
     n_examples_per_outcome: int = 8,
     crop_to_box: bool = False,
     box_crop_padding: float | None = None,
+    cam_target: str = "mammal",
 ) -> dict:
     """Pointing-game score across the whole test set, broken down by
     outcome (see OUTCOME_DEFINITIONS) rather than false positives alone.
@@ -410,9 +430,17 @@ def run_attention_audit(
     then covers most of a much smaller frame. Rows without a trustworthy
     box (has_box False) fall back to the full frame either way, matching
     crop_to_bbox's own training-time fallback.
+
+    `cam_target` (see cam_target_for_row): "mammal" reproduces the original
+    audit in metrics/<tag>/xai/attention_audit/; "predicted" writes to
+    metrics/<tag>/xai/attention_audit_predicted_class/ instead, so the two
+    never overwrite each other.
     """
+    if cam_target not in CAM_TARGETS:
+        raise ValueError(f"cam_target must be one of {CAM_TARGETS}, got {cam_target!r}")
     checkpoint_path = checkpoint_path or f"models/checkpoint_{tag}.pt"
-    out_dir = Path("metrics") / tag / "xai" / "attention_audit"
+    audit_dir_name = "attention_audit" if cam_target == "mammal" else "attention_audit_predicted_class"
+    out_dir = Path("metrics") / tag / "xai" / audit_dir_name
     heatmap_dir = out_dir / "heatmaps"
     heatmap_dir.mkdir(parents=True, exist_ok=True)
 
@@ -442,11 +470,12 @@ def run_attention_audit(
         if member_name not in reader:
             return None
         image = Image.open(io.BytesIO(reader.read(member_name))).convert("RGB")
+        target = cam_target_for_row(row["pred_label"], cam_target)
         if crop_to_box and row.get("has_box", False):
-            cam = compute_boxcrop_cam(cam_builder, image, row["bbox"], box_crop_padding)
+            cam = compute_boxcrop_cam(cam_builder, image, row["bbox"], box_crop_padding, target=target)
         else:
             input_tensor = DEFAULT_TRANSFORM(image).unsqueeze(0).to(device)
-            cam = cam_builder(input_tensor=input_tensor, targets=[BinaryClassifierOutputTarget(1)])[0]
+            cam = cam_builder(input_tensor=input_tensor, targets=[BinaryClassifierOutputTarget(target)])[0]
         return pointing_game_score(cam, row["bbox"])
 
     all_scored = []
@@ -456,7 +485,9 @@ def run_attention_audit(
         subset["pointing_game_score"] = [score_row(row) for _, row in subset.iterrows()]
         subset = subset.dropna(subset=["pointing_game_score"])
         subset["outcome"] = outcome
-        all_scored.append(subset[["image_id", "species", "project", "location", "confidence", "outcome", "pointing_game_score"]])
+        all_scored.append(
+            subset[["image_id", "species", "project", "location", "confidence", "pred_label", "outcome", "pointing_game_score"]]
+        )
 
         summary[outcome] = {
             "n_scored": len(subset),
@@ -474,10 +505,13 @@ def run_attention_audit(
             image = Image.open(io.BytesIO(reader.read(member_name))).convert("RGB")
             title = f"{row['species']} ({outcome}, score={row['pointing_game_score']:.2f})"
             out_path = heatmap_dir / f"{outcome}__{member_name}"
+            target = cam_target_for_row(row["pred_label"], cam_target)
             if crop_to_box and row.get("has_box", False):
-                compute_and_save_boxcrop_heatmap(cam_builder, image, row["bbox"], box_crop_padding, out_path, title)
+                compute_and_save_boxcrop_heatmap(
+                    cam_builder, image, row["bbox"], box_crop_padding, out_path, title, target
+                )
             else:
-                compute_and_save_heatmap(cam_builder, image, out_path, title)
+                compute_and_save_heatmap(cam_builder, image, out_path, title, target)
 
     scores_df = pd.concat(all_scored, ignore_index=True)
     scores_df.to_csv(out_dir / "attention_audit_scores.csv", index=False)
@@ -490,13 +524,16 @@ def run_attention_audit(
     by_project = zero_attention["project"].value_counts()
     summary["zero_attention_count_by_project"] = by_project.head(15).to_dict()
     summary["crop_to_box"] = crop_to_box
+    summary["cam_target"] = cam_target
 
     (out_dir / "summary.json").write_text(json.dumps(summary, indent=2))
 
-    with mlflow.start_run(run_name=f"attention_audit_{tag}"):
+    run_suffix = "" if cam_target == "mammal" else "_predicted_class"
+    with mlflow.start_run(run_name=f"attention_audit_{tag}{run_suffix}"):
         mlflow.log_param("architecture", architecture)
         mlflow.log_param("checkpoint_path", str(checkpoint_path))
         mlflow.log_param("crop_to_box", crop_to_box)
+        mlflow.log_param("cam_target", cam_target)
         for outcome in OUTCOME_DEFINITIONS:
             if summary[outcome]["pointing_game_mean"] is not None:
                 mlflow.log_metric(f"{outcome}_pointing_game_mean", summary[outcome]["pointing_game_mean"])
@@ -516,17 +553,18 @@ def main() -> None:
 
     argv = sys.argv[1:]
     crop_to_box = "--crop-to-box" in argv
-    argv = [a for a in argv if a != "--crop-to-box"]
+    cam_target = "predicted" if "--predicted-class" in argv else "mammal"
+    argv = [a for a in argv if a not in ("--crop-to-box", "--predicted-class")]
 
     if len(argv) < 1:
         raise SystemExit(
             "usage: python -m src.xai.gradcam <tag> [architecture] [test_split]\n"
-            "       python -m src.xai.gradcam <tag> --audit [architecture] [--crop-to-box]"
+            "       python -m src.xai.gradcam <tag> --audit [architecture] [--crop-to-box] [--predicted-class]"
         )
     tag = argv[0]
     if len(argv) > 1 and argv[1] == "--audit":
         architecture = argv[2] if len(argv) > 2 else DEFAULT_ARCHITECTURE
-        run_attention_audit(tag=tag, architecture=architecture, crop_to_box=crop_to_box)
+        run_attention_audit(tag=tag, architecture=architecture, crop_to_box=crop_to_box, cam_target=cam_target)
         return
 
     architecture = argv[1] if len(argv) > 1 else DEFAULT_ARCHITECTURE

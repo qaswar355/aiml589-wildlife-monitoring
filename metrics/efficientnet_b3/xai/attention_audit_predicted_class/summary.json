@@ -1,7 +1,5 @@
 {
   "tag": "efficientnet_b3",
-  "cam_target": "predicted_class",
-  "crop_to_box": false,
   "bird_correct": {
     "n_scored": 8444,
     "pointing_game_mean": 0.35679886057503624,
@@ -21,5 +19,24 @@
     "n_scored": 159,
     "pointing_game_mean": 0.21060298667165878,
     "pointing_game_median": 0.11700627952814102
-  }
+  },
+  "zero_attention_count_by_project": {
+    "RKU": 113,
+    "ENA": 108,
+    "EFH": 10,
+    "EFD": 9,
+    "WLG": 8,
+    "AIV": 8,
+    "W2V": 6,
+    "DWT": 5,
+    "Z20": 4,
+    "LR3": 4,
+    "SWG": 4,
+    "PS1": 2,
+    "ZIO": 2,
+    "TR1": 2,
+    "MAW": 1
+  },
+  "crop_to_box": false,
+  "cam_target": "predicted"
 }
