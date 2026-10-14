@@ -168,7 +168,8 @@ def run_cropped_drift_report(current: pd.DataFrame, model: torch.nn.Module, devi
         "retrain_recommended": bool(concept_result["drifted"]),
         "retrain_rationale": (
             "concept_drift.drifted is the deciding signal (labelled correctness actually degraded beyond "
-            "tolerance); confidence_drift and xai_centroid_drift are reported as corroborating context."
+            "tolerance); confidence_drift is corroborating context. xai_centroid_drift is recorded but not "
+            "used, as the heatmap centre mostly follows where animals appear in the frame."
         ),
     }
 
