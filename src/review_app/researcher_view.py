@@ -5,9 +5,11 @@ Every number on this view is read from real, already-computed project
 artifacts -- no placeholders, nothing fabricated for display purposes:
   - Model comparison: metrics/<tag>/eval.json for every checkpoint this
     project has actually evaluated.
-  - Drift status: metrics/drift/<tag>/report.json (src.monitoring.drift's
-    real three-signal output -- confidence drift, concept drift,
-    XAI-centroid drift).
+  - Drift status: metrics/drift/<tag>/report.json -- confidence drift and
+    concept drift. The report also holds an XAI-centroid result, which is
+    not shown: the heatmap centre mostly follows where animals sit in the
+    frame, so it can't separate a change in the images from a drop in
+    model quality.
   - Retraining history: reconstructed from metrics/*/eval.json file
     timestamps, NOT mlflow.search_runs() -- every run directory under
     mlruns/0/ is missing meta.yaml (checked directly: 131 run dirs, 0
@@ -45,7 +47,7 @@ THRESHOLD_CONFIG_PATH = Path("configs/inference/threshold_config.yaml")
 DRIFT_REPORT_PATH = METRICS_DIR / "drift" / "efficientnet_b3_boxcrop_cropped_vs_external" / "report.json"
 DEFAULT_RETRAIN_RATIONALE = (
     "concept drift is the deciding signal (labelled correctness actually degraded beyond tolerance); "
-    "confidence drift and XAI-centroid drift are corroborating context."
+    "confidence drift is corroborating context."
 )
 FULLFRAME_PREDICTIONS_PATH = Path("data/predictions/test_predictions_efficientnet_b3_boxcrop_retrained_fullframe.csv")
 
@@ -190,7 +192,7 @@ def render_researcher_view() -> None:
     if drift is None:
         st.info("No drift report found yet -- run `python -m src.monitoring.drift` to produce one.")
     else:
-        c1, c2, c3 = st.columns(3)
+        c1, c2 = st.columns(2)
         with c1:
             st.markdown("**Confidence drift**")
             cd = drift["confidence_drift"]
@@ -204,15 +206,6 @@ def render_researcher_view() -> None:
                 f"Accuracy {cc['baseline_metrics']['accuracy']:.1%} -> "
                 f"{cc['current_metrics']['accuracy']:.1%} ({cc['deltas']['accuracy']:+.1%})"
             )
-        with c3:
-            st.markdown("**XAI-centroid drift**")
-            xd = drift.get("xai_centroid_drift")
-            if xd is None:
-                status_badge("warning", "Not run")
-                st.caption("This drift report was generated without the centroid-drift check.")
-            else:
-                status_badge(_drift_status(xd["drifted"]), "Drifted" if xd["drifted"] else "Stable")
-                st.caption(f"x p={xd['x_axis']['p_value']:.4f}  y p={xd['y_axis']['p_value']:.4f}")
 
         st.markdown(
             f"**Retrain recommended: {'Yes' if drift['retrain_recommended'] else 'No'}** — {drift.get('retrain_rationale', DEFAULT_RETRAIN_RATIONALE)}"
