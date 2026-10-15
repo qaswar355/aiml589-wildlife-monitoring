@@ -125,6 +125,18 @@ def pointing_game_score(cam: np.ndarray, bbox: list[float]) -> float:
     return float(cam[y0:y1, x0:x1].sum() / total)
 
 
+def crop_canvas_bounds(
+    bounds: tuple[float, float, float, float], canvas_size: int = 300
+) -> tuple[int, int, int, int]:
+    """Pixel (x0, y0, x1, y1) on a canvas_size x canvas_size canvas where a
+    crop with normalised `bounds` (from crop_bounds_from_bbox) lands --
+    the region compute_boxcrop_cam pastes the crop's heatmap into."""
+    x0, y0, x1, y1 = bounds
+    cx0, cy0 = int(x0 * canvas_size), int(y0 * canvas_size)
+    cx1, cy1 = int(x1 * canvas_size), int(y1 * canvas_size)
+    return cx0, cy0, max(cx1, cx0 + 1), max(cy1, cy0 + 1)
+
+
 def compute_boxcrop_cam(
     cam_builder: GradCAMPlusPlus,
     image: Image.Image,
@@ -163,10 +175,8 @@ def compute_boxcrop_cam(
     input_tensor = DEFAULT_TRANSFORM(cropped).unsqueeze(0).to(cam_builder.device)
     crop_cam = cam_builder(input_tensor=input_tensor, targets=[BinaryClassifierOutputTarget(target)])[0]
 
-    cx0, cy0 = int(x0 * canvas_size), int(y0 * canvas_size)
-    cx1, cy1 = int(x1 * canvas_size), int(y1 * canvas_size)
-    cx1, cy1 = max(cx1, cx0 + 1), max(cy1, cy0 + 1)
-    resized = np.array(Image.fromarray(crop_cam, mode="F").resize((cx1 - cx0, cy1 - cy0), Image.BILINEAR))
+    cx0, cy0, cx1, cy1 = crop_canvas_bounds(bounds, canvas_size)
+    resized =np.array(Image.fromarray(crop_cam, mode="F").resize((cx1 - cx0, cy1 - cy0), Image.BILINEAR))
     canvas[cy0:cy1, cx0:cx1] = resized
     return canvas
 

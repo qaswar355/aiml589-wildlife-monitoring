@@ -1,36 +1,34 @@
 # Decision threshold per deployment zone.
-# Set via precision-recall curve analysis in src/training/evaluate.py.
-# Prioritises recall (minimise false negatives = missed invasive mammals).
-# Updated after each retraining cycle.
+# Precision-first: maximise precision (fewest birds wrongly called mammals)
+# while keeping recall above recall_floor below. Thresholds apply to the raw
+# (not temperature-scaled) probability. Updated after each retraining cycle.
 thresholds:
-  # checkpoint_efficientnet_b3_boxcrop_retrained.pt (see serving.yaml) was
-  # trained mostly on box-cropped images. Until live MegaDetector cropping
-  # existed, predict.py classified full, uncropped frames -- a real
-  # train/inference mismatch that capped achievable recall well below this
-  # file's own 0.90 floor (documented here as a known limitation at the
-  # time; see git history for the full numbers). Now that predict_one()
-  # crops to a confident MegaDetector detection before classifying
-  # (src/inference/megadetector.py), that mismatch is gone, and 0.05 --
-  # kept at the SAME value chosen back then to maximise recall under the
-  # broken full-frame distribution -- finally does what it was originally
-  # meant to: swept the box-cropped test predictions
-  # (data/predictions/test_predictions_efficientnet_b3_boxcrop_retrained.csv,
-  # crop_to_box=True, matching live serving) from threshold=0.005 to 0.99;
-  # recall stays at or above 0.90 across the ENTIRE range now (min 96.7% at
-  # threshold=0.99). At 0.05: recall=98.57%, precision=95.22%,
-  # accuracy=97.51%.
+  # Swept the deployed checkpoint's box-cropped predictions
+  # (checkpoint_efficientnet_b3_boxcrop_retrained.pt, crop_to_box=True,
+  # matching live serving). Precision rises steadily with the threshold
+  # while recall barely moves, because nearly all probabilities sit close
+  # to 0 or 1. Taken literally, "max precision with recall >= 0.90" picks an
+  # extreme value (0.9999 on the original test set), and on the new-reserve
+  # external test images recall drops below 0.90 by 0.995 -- so 0.95 keeps recall
+  # well above the floor on every set:
+  #   original test (15,078):        precision 98.30%, recall 97.52%, 99 FP
+  #                                  (vs 95.22% / 98.57% / 291 FP at 0.05)
+  #   external val split (922):      precision 92.31%, recall 98.97%, 40 FP
+  #                                  (vs 84.59% / 99.59% / 88 FP at 0.05)
+  # The previous value, 0.05, was a recall-first choice left over from
+  # before the project settled on precision-first.
   #
   # Zone-specific thresholds intentionally left at their 0.5 placeholder:
   # no zone-level breakdown exists to calibrate them from, and fiordland
   # in particular (a high-sensitivity zone) shouldn't silently inherit a
   # threshold tuned for the whole dataset.
-  default: 0.05
+  default: 0.95
   north_island: 0.5
   south_island: 0.5
   fiordland: 0.5       # high-sensitivity zone (critical kiwi habitat)
 
 # Minimum recall floor enforced by the model governance gate. Comfortably
-# met now (98.57% at the deployed threshold, see above) -- previously
+# met now (97.52% at the deployed threshold, see above) -- previously
 # tracked here as a known, visible gap while predict.py served full frames
 # without live MegaDetector cropping.
 recall_floor: 0.90
@@ -46,9 +44,12 @@ recall_floor: 0.90
 # cropped-input distribution live MegaDetector detection now serves
 # (metrics/efficientnet_b3_boxcrop_retrained/calibration/uncertainty.json).
 # MC Dropout uncertainty is now a MUCH stronger error signal than it was on
-# full frames (AUC 0.94 vs 0.69 previously) -- consistent with cropping
+# full frames (AUC 0.95 vs 0.69 previously) -- consistent with cropping
 # fixing this checkpoint's train/inference distribution mismatch generally,
 # not just its probability calibration. Kept the same 80th-percentile
-# convention as before: flagged_fraction=20.0%  error_capture_rate=90.9%
-# (vs 39.4% previously)  precision_of_flagging=6.9%.
-uncertainty_review_cutoff: 2.1111108594595862e-07
+# convention as before. Re-run after the default threshold moved to 0.95
+# (errors are counted at the decision threshold): flagged_fraction=20.0%
+# error_capture_rate=91.1% (vs 90.9% at 0.05, 39.4% on full frames)
+# precision_of_flagging=7.7%. The cutoff itself barely moved (2.11e-07 ->
+# 2.07e-07), only because MC Dropout's random masks differ between runs.
+uncertainty_review_cutoff: 2.068835129875879e-07
