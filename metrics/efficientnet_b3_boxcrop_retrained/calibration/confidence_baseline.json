@@ -1,0 +1,16 @@
+{
+  "tag": "efficientnet_b3_boxcrop_retrained",
+  "threshold_used": 0.95,
+  "n_val_images": 8012,
+  "n_errors": 135,
+  "mc_dropout": {
+    "auc": 0.9470953878850286,
+    "errors_caught_at_10pct": 0.8518518518518519,
+    "errors_caught_at_20pct": 0.9111111111111111
+  },
+  "plain_confidence": {
+    "auc": 0.9465715938103902,
+    "errors_caught_at_10pct": 0.8518518518518519,
+    "errors_caught_at_20pct": 0.9185185185185185
+  }
+}

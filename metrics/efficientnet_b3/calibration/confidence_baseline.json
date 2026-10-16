@@ -1,0 +1,16 @@
+{
+  "tag": "efficientnet_b3",
+  "threshold_used": 0.95,
+  "n_val_images": 8012,
+  "n_errors": 234,
+  "mc_dropout": {
+    "auc": 0.9246614931881066,
+    "errors_caught_at_10pct": 0.7649572649572649,
+    "errors_caught_at_20pct": 0.8717948717948718
+  },
+  "plain_confidence": {
+    "auc": 0.9248543448209172,
+    "errors_caught_at_10pct": 0.7649572649572649,
+    "errors_caught_at_20pct": 0.8675213675213675
+  }
+}
